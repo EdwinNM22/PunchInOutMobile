@@ -20,7 +20,8 @@
       "permissions": [
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT"
-      ]
+      ],
+      "package": "com.valerianodev.myproyect"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -46,7 +47,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "ef412bca-a64f-4c64-aa1a-e52e731166cf"
+        "projectId": "790f885d-ca60-4163-8a73-3d23c90079c6"
       }
     }
   }

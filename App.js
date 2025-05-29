@@ -27,10 +27,18 @@ import SelectLocation from './screens/SelectLocation';
 import AssignProject from './screens/AssignProject';
 import SelectWorker from './screens/SelectWorker';
 import adminGestion from './screens/adminGestion';
-import ReporteUsuario from './screens/ReporteUsuario';
+
 import AdminProjectReports from './screens/AdminProjectReports';
 import UserOptions from './screens/UserOptions';
 import UserLocationMap from './screens/UserLocationMap';
+import ReporteUsuario from './screens/ReporteHoras/ReporteUsuario';
+import ReporteSemanal from './screens/ReporteHoras/ReporteSemanal';
+import ReporteMensual from './screens/ReporteHoras/ReporteMensual';
+import ReporteProyectos from './screens/ReporteHoras/ReporteProyectos';
+
+
+
+
 
 export default function App() {
   useEffect(() => {
@@ -83,7 +91,14 @@ export default function App() {
         <Stack.Screen name="AssignProject" component={AssignProject} />
         <Stack.Screen name="SelectWorker" component={SelectWorker} />
         <Stack.Screen name="adminGestion" component={adminGestion} />
+
+                {/* Reporte de horas */} 
         <Stack.Screen name="ReporteUsuario" component={ReporteUsuario} />
+        <Stack.Screen name="ReporteSemanal" component={ReporteSemanal} />
+        <Stack.Screen name="ReporteMensual" component={ReporteMensual} />
+        <Stack.Screen name="ReporteProyectos" component={ReporteProyectos} />
+
+
         <Stack.Screen name="AdminProjectReports" component={AdminProjectReports} options={{ title: 'Reportes del proyecto' }} />
         <Stack.Screen name="UserOptions" component={UserOptions} />
         <Stack.Screen name="UserLocationMap" component={UserLocationMap} />
