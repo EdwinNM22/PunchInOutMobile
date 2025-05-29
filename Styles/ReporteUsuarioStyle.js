@@ -294,4 +294,18 @@ export default StyleSheet.create({
       color: '#3498db',
       fontWeight: 'bold',
     },
+
+
+    pdfButton: {
+  backgroundColor: '#4CAF50',
+  padding: 12,
+  borderRadius: 5,
+  marginVertical: 15,
+  alignItems: 'center',
+},
+pdfButtonText: {
+  color: 'white',
+  fontWeight: 'bold',
+  fontSize: 16,
+},
   });

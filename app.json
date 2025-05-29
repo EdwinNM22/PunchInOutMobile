@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "my-proyect",
-    "slug": "my-proyect",
+    "name": "PunchInOutMobile",
+    "slug": "PunchInOutMobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,43 +12,21 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "ios": {
+      "supportsTablet": true
+    },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "permissions": [
-        "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT"
-      ],
-      "package": "com.valerianodev.myproyect"
+      "edgeToEdgeEnabled": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store",
-      "expo-notifications",
-      [
-        "expo-local-authentication",
-        {
-          "faceIDPermission": "We use Face ID so you can log in quickly without typing your password."
-        }
-      ]
-    ],
-    "ios": {
-      "infoPlist": {
-        "bundleIdentifier": "com.valeriano.my-project",
-        "NSFaceIDUsageDescription": "We use Face ID so you can log in quickly without typing your password.",
-        "supportsTablet": true,
-        "ITSAppUsesNonExemptEncryption": false
-      },
-      "bundleIdentifier": "com.valerianodev.myproyect"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "790f885d-ca60-4163-8a73-3d23c90079c6"
-      }
-    }
+      "expo-secure-store"
+    ]
   }
 }
