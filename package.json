@@ -1,0 +1,44 @@
+{
+  "name": "my-proyect",
+  "license": "0BSD",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^14.0.2",
+    "@react-native-async-storage/async-storage": "2.1.2",
+    "@react-native-firebase/firestore": "^21.13.0",
+    "@react-navigation/native": "^7.1.6",
+    "@react-navigation/stack": "^7.2.10",
+    "date-fns": "^4.1.0",
+    "expo": "^53.0.9",
+    "expo-device": "~7.1.4",
+    "expo-local-authentication": "~16.0.4",
+    "expo-location": "~18.1.5",
+    "expo-notifications": "~0.31.2",
+    "expo-print": "~14.1.4",
+    "expo-secure-store": "~14.2.3",
+    "expo-sharing": "~13.1.5",
+    "expo-status-bar": "~2.2.3",
+    "firebase": "^11.6.0",
+    "react": "19.0.0",
+    "react-native": "0.79.2",
+    "react-native-date-picker": "^5.0.12",
+    "react-native-gesture-handler": "~2.24.0",
+    "react-native-maps": "^1.20.1",
+    "react-native-pager-view": "6.7.1",
+    "react-native-pdf-lib": "^1.0.0",
+    "react-native-safe-area-context": "5.4.0",
+    "react-native-screens": "~4.10.0",
+    "react-native-tab-view": "^4.0.10"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0"
+  },
+  "private": true
+}
