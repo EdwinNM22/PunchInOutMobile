@@ -5,7 +5,136 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore, collection, getDocs, doc, getDoc, query, where, setDoc, addDoc, serverTimestamp, orderBy, limit } from 'firebase/firestore';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, parseISO, isWithinInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
+import * as Print from 'expo-print';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import styles from '../../Styles/ReporteUsuarioStyle';
+
+// Componente para generar el PDF
+const PDFGenerator = ({ reportData }) => {
+  const generateHTML = () => {
+    if (!reportData) return '';
+
+    const weekStart = format(parseSafeDate(reportData.period.weekStart), 'dd/MM/yyyy');
+    const weekEnd = format(parseSafeDate(reportData.period.weekEnd), 'dd/MM/yyyy');
+    const generatedAt = format(new Date(), 'dd/MM/yyyy HH:mm');
+
+    let projectsHTML = '';
+    let dailyHTML = '';
+
+    // Generar HTML para los proyectos
+    reportData.weekly.forEach(day => {
+      if (day.hours > 0 && day.projects && day.projects.length > 0) {
+        dailyHTML += `
+          <div style="margin-bottom: 15px; border: 1px solid #ddd; padding: 10px; border-radius: 5px;">
+            <h3 style="margin: 0 0 10px 0; color: #333; display: flex; justify-content: space-between;">
+              <span>${day.dayName} - ${format(parseSafeDate(day.date), 'dd/MM')}</span>
+              <span>${day.hours.toFixed(2)} hrs</span>
+            </h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              ${day.projects.map(project => `
+                <tr>
+                  <td style="padding: 5px; border-bottom: 1px solid #eee;">${project.name}</td>
+                  <td style="padding: 5px; border-bottom: 1px solid #eee; text-align: right;">${project.hours.toFixed(2)} hrs</td>
+                </tr>
+              `).join('')}
+            </table>
+          </div>
+        `;
+      }
+    });
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Reporte Semanal</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+            .header { text-align: center; margin-bottom: 20px; }
+            .title { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
+            .subtitle { font-size: 16px; color: #666; margin-bottom: 20px; }
+            .summary { background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+            .summary-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+            .summary-value { font-weight: bold; }
+            .section-title { font-size: 18px; font-weight: bold; margin: 20px 0 10px 0; color: #444; }
+            .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #999; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="title">Reporte Semanal</div>
+            <div class="subtitle">${weekStart} - ${weekEnd}</div>
+          </div>
+          
+          <div class="summary">
+            <div class="section-title">Resumen Semanal</div>
+            <div class="summary-row">
+              <span>Total horas:</span>
+              <span class="summary-value">${reportData.summary.weeklyTotal.toFixed(2)} hrs</span>
+            </div>
+          </div>
+          
+          <div class="section-title">Detalle por Día</div>
+          ${dailyHTML}
+          
+          <div class="footer">
+            Generado el ${generatedAt}
+          </div>
+        </body>
+      </html>
+    `;
+  };
+
+  const parseSafeDate = (dateString) => {
+    try {
+      if (!dateString) return new Date();
+      const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+      return isNaN(date.getTime()) ? new Date() : date;
+    } catch (e) {
+      return new Date();
+    }
+  };
+
+  const generatePDF = async () => {
+    try {
+      const html = generateHTML();
+      
+      // Generar el PDF con expo-print
+      const { uri } = await Print.printToFileAsync({
+        html: html,
+        width: 612, // 8.5in en puntos (tamaño carta)
+        height: 792, // 11in en puntos
+        base64: false
+      });
+      
+      console.log('PDF generado en:', uri);
+      
+      // Opción para compartir el PDF
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Compartir Reporte Semanal',
+          UTI: 'com.adobe.pdf'
+        });
+      } else {
+        // Si no se puede compartir, al menos mostrar un mensaje
+        alert(`PDF generado correctamente en: ${uri}`);
+      }
+      
+    } catch (error) {
+      console.error('Error al generar PDF:', error);
+      alert('Error al generar el PDF. Por favor intenta nuevamente.');
+    }
+  };
+
+  return (
+    <TouchableOpacity onPress={generatePDF} style={styles.pdfButton}>
+      <Text style={styles.pdfButtonText}>Generar PDF</Text>
+    </TouchableOpacity>
+  );
+};
 
 export default function ReporteSemanal() {
   const route = useRoute();
@@ -131,22 +260,18 @@ export default function ReporteSemanal() {
     fetchReportData();
   };
 
-  // Modificación: Si ya existe reporte semanal para la semana, lo actualiza en lugar de ignorarlo.
   const checkAndSaveHistoricalReports = async (userId, reportData, weekStart) => {
     try {
       const now = new Date();
 
-      // Guardar reporte actual
       const reportRef = doc(db, 'usuarios', userId, 'reportes', 'current');
       await setDoc(reportRef, reportData);
 
-      // Buscar si ya existe un reporte histórico para esta semana
       const weeklyHistoryRef = collection(db, 'usuarios', userId, 'reportes', 'historial', 'semanales');
       const q = query(weeklyHistoryRef, where('period.weekStart', '==', weekStart.toISOString()));
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {
-        // No existe reporte para esta semana -> guardar nuevo
         await addDoc(weeklyHistoryRef, {
           ...reportData,
           type: 'weekly',
@@ -154,7 +279,6 @@ export default function ReporteSemanal() {
         });
         console.log('Nuevo reporte semanal guardado en historial');
       } else {
-        // Ya existe reporte para esta semana -> actualizar el primer documento encontrado
         const docToUpdate = querySnapshot.docs[0];
         const docRef = doc(db, 'usuarios', userId, 'reportes', 'historial', 'semanales', docToUpdate.id);
         await setDoc(docRef, {
@@ -237,6 +361,9 @@ export default function ReporteSemanal() {
             Guardado el {format(parseSafeDate(selectedHistoryReport.savedAt), 'dd/MM/yyyy HH:mm')}
           </Text>
         </View>
+
+        {/* Botón para generar PDF */}
+        <PDFGenerator reportData={selectedHistoryReport} />
 
         <Text style={styles.sectionTitle}>Horas por Día</Text>
         {selectedHistoryReport.weekly?.map((day, index) => (
