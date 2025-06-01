@@ -120,6 +120,13 @@ export default function UserProjects() {
             <Text style={styles.locationButtonText}>Compartir mi ubicación</Text>
           </TouchableOpacity>
 
+                <TouchableOpacity
+                  style={styles.locationButton}
+                  onPress={() => navigation.navigate('ChatScreen')}
+                >
+                  <Text style={styles.buttonText}>chat entre personas</Text>
+                </TouchableOpacity>
+
           {projects.length === 0 ? (
             <Text style={styles.noProjectsText}>No tienes proyectos asignados</Text>
           ) : (

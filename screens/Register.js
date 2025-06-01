@@ -1,11 +1,16 @@
 import { Text, View, TextInput, TouchableOpacity, Alert, Pressable, Clipboard } from 'react-native';
 import React, { useState } from 'react';
 import appFirebase from '../credenciales';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
+import { initializeApp } from 'firebase/app';
 
 const auth = getAuth(appFirebase);
 const db = getFirestore(appFirebase);
+
+// Crear una segunda app de Firebase solo para registrar usuarios sin cerrar la sesión actual
+const secondaryApp = initializeApp(appFirebase.options, 'Secondary');
+const secondaryAuth = getAuth(secondaryApp);
 
 export default function Register(props) {
   const [email, setEmail] = useState('');
@@ -16,9 +21,11 @@ export default function Register(props) {
 
   const registrar = async () => {
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      // Crear el usuario con la segunda instancia de auth
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
       const user = userCredential.user;
 
+      // Guardar en Firestore con la instancia principal
       await setDoc(doc(db, "usuarios", user.uid), {
         nombre: nombre,
         email: email,
@@ -26,6 +33,9 @@ export default function Register(props) {
       });
 
       console.log("Usuario guardado con rol USER");
+
+      // Cerrar sesión en la segunda instancia para evitar conflictos
+      await signOut(secondaryAuth);
 
       // Guardar credenciales para mostrarlas
       setCredenciales({

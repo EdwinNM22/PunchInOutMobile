@@ -33,6 +33,15 @@ const AdminDashboard = () => {
 
       <TouchableOpacity
         style={styles.button}
+        onPress={() => navigation.navigate('ChatScreen')}
+      >
+        <Text style={styles.buttonText}>chat entre personas</Text>
+      </TouchableOpacity>
+
+
+
+      <TouchableOpacity
+        style={styles.button}
         onPress={() => navigation.navigate('UserOptions')}
       >
         <Text style={styles.buttonText}>Roles de Usuario</Text>
