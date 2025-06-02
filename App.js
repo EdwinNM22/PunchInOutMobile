@@ -41,10 +41,10 @@ import ChatScreen from './screens/UserChat/Chat';
 
 
 
+
 export default function App() {
   useEffect(() => {
     (async () => {
-      // En iOS primero revisa si el usuario ya le dio permiso a la app para recibir notificaciones y si no se lo pide
       const { status } = await Notifications.getPermissionsAsync();
       if (status !== 'granted') {
         const { status: newStatus } = await Notifications.requestPermissionsAsync();
@@ -55,21 +55,26 @@ export default function App() {
     })();
   }, []);
 
-  /* Le dice a expo qué hacer cuando la app está corriendo al fondo */
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
-      shouldShowAlert: true,   // show banner
+      shouldShowAlert: true,
       shouldPlaySound: false,
       shouldSetBadge: false,
     }),
   });
 
-  //Navegación
   const Stack = createStackNavigator();
 
   function MyStack() {
     return (
-      <Stack.Navigator>
+      <Stack.Navigator
+        screenOptions={{
+          headerStyle: { backgroundColor: '#121212' },
+          headerTintColor: '#E53935',
+          headerTitleStyle: { fontWeight: 'bold' },
+          contentStyle: { backgroundColor: '#121212' },
+        }}
+      >
         {/* Pantallas generales */}
         <Stack.Screen name="Login" component={Login} />
         <Stack.Screen name="Register" component={Register} />
@@ -77,52 +82,40 @@ export default function App() {
 
         {/* Pantallas de usuario */}
         <Stack.Screen name="UserHome" component={UserHome} />
-        {/* <Stack.Screen name="AdminHome" component={AdminHome} /> */}
         <Stack.Screen name="UserLocation" component={UserLocation} />
         <Stack.Screen name="MapPage" component={MapaPage} />
-      
         <Stack.Screen name="UserProjects" component={UserProjects} />
         <Stack.Screen name="UserProjectDetail" component={UserProjectDetail} />
 
-        {/* Pantallas de administrador */} 
+        {/* Pantallas de administrador */}
         <Stack.Screen name="AdminDashboard" component={AdminDashboard} />
         <Stack.Screen name="AdminUsers" component={AdminUsers} />
         <Stack.Screen name="AdminProjects" component={AdminProjects} />
-        <Stack.Screen name="CreateProject" component={CreateProject} options={{ unmountOnBlur: false }}/>
+        <Stack.Screen name="CreateProject" component={CreateProject} options={{ unmountOnBlur: false }} />
         <Stack.Screen name="SelectLocation" component={SelectLocation} />
         <Stack.Screen name="AssignProject" component={AssignProject} />
         <Stack.Screen name="SelectWorker" component={SelectWorker} />
         <Stack.Screen name="adminGestion" component={adminGestion} />
 
-                {/* Reporte de horas */} 
+        {/* Reporte de horas */}
         <Stack.Screen name="ReporteUsuario" component={ReporteUsuario} />
         <Stack.Screen name="ReporteSemanal" component={ReporteSemanal} />
         <Stack.Screen name="ReporteMensual" component={ReporteMensual} />
         <Stack.Screen name="ReporteProyectos" component={ReporteProyectos} />
 
-
         <Stack.Screen name="AdminProjectReports" component={AdminProjectReports} options={{ title: 'Reportes del proyecto' }} />
         <Stack.Screen name="UserOptions" component={UserOptions} />
         <Stack.Screen name="UserLocationMap" component={UserLocationMap} />
-        {/* Pantallas de carga */}
       </Stack.Navigator>
     );
   }
 
   return (
-    <SafeAreaProvider>
+  <SafeAreaProvider>
     <NavigationContainer>
-      <MyStack/>
+      <MyStack />
     </NavigationContainer>
-    </SafeAreaProvider>
-  );
+    <StatusBar style="light" />
+  </SafeAreaProvider>
+);
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

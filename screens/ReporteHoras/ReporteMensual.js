@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, ScrollView, TouchableOpacity, Modal, RefreshControl } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, ScrollView, TouchableOpacity, Modal, RefreshControl, ImageBackground } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, collection, getDocs, doc, getDoc, query, where, setDoc, addDoc, serverTimestamp, orderBy, limit, updateDoc } from 'firebase/firestore';
@@ -7,6 +7,7 @@ import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInter
 import { es } from 'date-fns/locale';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import styles from '../../Styles/ReporteUsuarioStyle';
 
 // Componente para generar el PDF
@@ -15,7 +16,6 @@ const PDFGenerator = ({ reportData }) => {
     if (!reportData) return '';
 
     const monthStart = format(parseSafeDate(reportData.period.monthStart), 'MMMM yyyy', { locale: es });
-    const monthEnd = format(parseSafeDate(reportData.period.monthEnd), 'MMMM yyyy', { locale: es });
     const generatedAt = format(new Date(), 'dd/MM/yyyy HH:mm');
 
     // Generar HTML para las semanas
@@ -163,17 +163,15 @@ const PDFGenerator = ({ reportData }) => {
     try {
       const html = generateHTML();
       
-      // Generar el PDF con expo-print
       const { uri } = await Print.printToFileAsync({
         html: html,
-        width: 612, // 8.5in en puntos (tamaño carta)
-        height: 792, // 11in en puntos
+        width: 612,
+        height: 792,
         base64: false
       });
       
       console.log('PDF generado en:', uri);
       
-      // Opción para compartir el PDF
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: 'application/pdf',
@@ -191,7 +189,12 @@ const PDFGenerator = ({ reportData }) => {
   };
 
   return (
-    <TouchableOpacity onPress={generatePDF} style={styles.pdfButton}>
+    <TouchableOpacity 
+      onPress={generatePDF} 
+      style={styles.pdfButton}
+      activeOpacity={0.7}
+    >
+      <Icon name="picture-as-pdf" size={20} color="#FFFFFF" style={styles.pdfIcon} />
       <Text style={styles.pdfButtonText}>Generar PDF</Text>
     </TouchableOpacity>
   );
@@ -429,23 +432,41 @@ export default function ReporteMensual() {
 
     return (
       <ScrollView style={styles.detailsContainer}>
-        <TouchableOpacity style={styles.backButton} onPress={backToHistoryList}>
-          <Text style={styles.backButtonText}>← Volver al historial</Text>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={backToHistoryList}
+          activeOpacity={0.7}
+        >
+          <Icon name="arrow-back" size={20} color="#4285F4" />
+          <Text style={styles.backButtonText}>Volver al historial</Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>Detalles del reporte mensual</Text>
-        <Text style={styles.subtitle}>
-          Mes: {format(parseSafeDate(selectedHistoryReport.period.monthStart), 'MMMM yyyy', { locale: es })}
+        <Text style={styles.detailsTitle}>
+          {format(parseSafeDate(selectedHistoryReport.period.monthStart), 'MMMM yyyy', { locale: es })}
         </Text>
-        <Text style={styles.totalHours}>Total horas: {selectedHistoryReport.summary.monthlyTotal.toFixed(2)} hrs</Text>
 
-        {/* Botón para generar PDF */}
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Resumen Mensual</Text>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Total horas:</Text>
+            <Text style={styles.summaryValue}>{selectedHistoryReport.summary.monthlyTotal.toFixed(2)} hrs</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Horas acumuladas:</Text>
+            <Text style={styles.summaryValue}>{selectedHistoryReport.summary.allTimeTotal.toFixed(2)} hrs</Text>
+          </View>
+          <Text style={styles.periodText}>
+            Guardado el {format(parseSafeDate(selectedHistoryReport.savedAt), 'dd/MM/yyyy HH:mm')}
+          </Text>
+        </View>
+
         <PDFGenerator reportData={selectedHistoryReport} />
 
+        <Text style={styles.sectionTitle}>Horas por Semana</Text>
         {renderWeeks(selectedHistoryReport)}
 
+        <Text style={styles.sectionTitle}>Resumen por Proyecto</Text>
         <View style={styles.projectsSummary}>
-          <Text style={styles.subtitle}>Resumen por proyecto:</Text>
           {selectedHistoryReport.byProject?.map(p => (
             <View key={p.id} style={styles.projectRow}>
               <Text style={styles.projectName}>{p.name}</Text>
@@ -458,21 +479,39 @@ export default function ReporteMensual() {
   }
 
   function renderHistoryList() {
-    if (loadingHistory) return <ActivityIndicator size="large" color="#000" />;
-
-    if (reportHistory.length === 0) return <Text style={styles.noData}>No hay reportes históricos.</Text>;
-
     return (
       <FlatList
         data={reportHistory}
         keyExtractor={(item) => item.id}
+        refreshControl={<RefreshControl refreshing={loadingHistory} onRefresh={loadReportHistory} />}
+        contentContainerStyle={styles.historyListContainer}
         renderItem={({ item }) => (
-          <TouchableOpacity style={styles.historyItem} onPress={() => loadSpecificReport(item)}>
-            <Text style={styles.historyDate}>
+          <TouchableOpacity
+            style={styles.historyItem}
+            onPress={() => loadSpecificReport(item)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.historyItemTitle}>
               {format(item.period.monthStart, 'MMMM yyyy', { locale: es })}
             </Text>
-            <Text style={styles.historyHours}>Horas: {item.summary.monthlyTotal.toFixed(2)}</Text>
+            <View style={styles.historyItemRow}>
+              <Text style={styles.historyItemLabel}>Horas totales:</Text>
+              <Text style={styles.historyItemValue}>{item.summary.monthlyTotal.toFixed(2)} hrs</Text>
+            </View>
+            <View style={styles.historyItemRow}>
+              <Text style={styles.historyItemLabel}>Horas acumuladas:</Text>
+              <Text style={[styles.historyItemValue, styles.historyItemTotal]}>{item.summary.allTimeTotal.toFixed(2)} hrs</Text>
+            </View>
+            <Text style={styles.savedAtText}>
+              Guardado: {format(parseSafeDate(item.savedAt), 'dd/MM/yyyy HH:mm')}
+            </Text>
           </TouchableOpacity>
+        )}
+        ListEmptyComponent={() => (
+          <View style={styles.emptyContainer}>
+            <Icon name="history" size={40} color="#AAAAAA" />
+            <Text style={styles.emptyText}>No hay reportes históricos para mostrar.</Text>
+          </View>
         )}
       />
     );
@@ -483,49 +522,108 @@ export default function ReporteMensual() {
   }, []);
 
   return (
-    <View style={styles.container}>
-      {loading && <ActivityIndicator size="large" color="#000" />}
-
-      {!loading && reportData && (
-        <ScrollView
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchReportData} />}
-        >
-          <Text style={styles.title}>Reporte Mensual Actual</Text>
-          <Text style={styles.summary}>
-            Total horas este mes: {reportData.summary.monthlyTotal.toFixed(2)} hrs
-          </Text>
-
-          {renderWeeks(reportData)}
-
-          <TouchableOpacity style={styles.historyButton} onPress={loadReportHistory}>
-            <Text style={styles.historyButtonText}>Ver historial de reportes mensuales</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      )}
-
-      <Modal
-        visible={historyModalVisible}
-        animationType="slide"
-        onRequestClose={() => {
-          setHistoryModalVisible(false);
-          setSelectedHistoryReport(null);
-          setViewMode('list');
-        }}
-      >
-        <View style={styles.modalContainer}>
-          {viewMode === 'list' ? renderHistoryList() : renderMonthlyDetails()}
-          <TouchableOpacity
-            style={styles.closeModalButton}
-            onPress={() => {
-              setHistoryModalVisible(false);
-              setSelectedHistoryReport(null);
-              setViewMode('list');
-            }}
+    <ImageBackground 
+      source={require('../../assets/fondo10.jpg')}
+      style={styles.backgroundImage}
+      resizeMode="cover"
+    >
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Reporte Mensual</Text>
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={fetchReportData}
+            activeOpacity={0.7}
           >
-            <Text style={styles.closeModalButtonText}>Cerrar</Text>
+            <Icon name="refresh" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
-      </Modal>
-    </View>
+
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#E53935" />
+            <Text style={styles.loadingText}>Cargando reporte...</Text>
+          </View>
+        ) : reportData ? (
+          <ScrollView 
+            style={styles.reportContainer} 
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchReportData} />}
+          >
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryHeader}>
+                <Text style={styles.summaryTitle}>Resumen Mensual</Text>
+                <PDFGenerator reportData={reportData} />
+              </View>
+              
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Total horas:</Text>
+                <Text style={styles.summaryValue}>{reportData.summary.monthlyTotal.toFixed(2)} hrs</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Horas acumuladas:</Text>
+                <Text style={styles.summaryValue}>{reportData.summary.allTimeTotal.toFixed(2)} hrs</Text>
+              </View>
+              <Text style={styles.periodText}>
+                {format(parseSafeDate(reportData.period.monthStart), 'MMMM yyyy', { locale: es })}
+              </Text>
+            </View>
+
+            <Text style={styles.sectionTitle}>Horas por Semana</Text>
+            {renderWeeks(reportData)}
+
+            <Text style={styles.sectionTitle}>Resumen por Proyecto</Text>
+            <View style={styles.projectsSummary}>
+              {reportData.byProject?.map(p => (
+                <View key={p.id} style={styles.projectRow}>
+                  <Text style={styles.projectName}>{p.name}</Text>
+                  <Text style={styles.projectHours}>{p.monthlyHours.toFixed(2)} hrs</Text>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Icon name="error-outline" size={40} color="#AAAAAA" />
+            <Text style={styles.emptyText}>No hay datos para mostrar</Text>
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={styles.historyButton}
+          onPress={loadReportHistory}
+          activeOpacity={0.7}
+        >
+          <Icon name="history" size={20} color="#FFFFFF" style={styles.historyIcon} />
+          <Text style={styles.historyButtonText}>Ver Historial</Text>
+        </TouchableOpacity>
+
+        <Modal 
+          visible={historyModalVisible} 
+          animationType="slide" 
+          onRequestClose={() => {
+            setHistoryModalVisible(false);
+            backToHistoryList();
+          }}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Historial de Reportes</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => {
+                  setHistoryModalVisible(false);
+                  backToHistoryList();
+                }}
+                activeOpacity={0.7}
+              >
+                <Icon name="close" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+
+            {viewMode === 'list' ? renderHistoryList() : renderMonthlyDetails()}
+          </View>
+        </Modal>
+      </View>
+    </ImageBackground>
   );
 }

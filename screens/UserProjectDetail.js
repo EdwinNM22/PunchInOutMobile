@@ -1,15 +1,11 @@
 // screens/UserProjectDetail.js
-// --------------------------------------------------------------
-//   Push-In / Push-Out + Checklist inicial + Recuento final
-//   + Comentarios libres cada 2 h
-// --------------------------------------------------------------
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, Alert, StyleSheet, SafeAreaView,
   Linking, Modal, TextInput, KeyboardAvoidingView, Platform,
-  ActivityIndicator, FlatList, SectionList
+  ActivityIndicator, FlatList, SectionList, ScrollView, Image
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { getAuth } from 'firebase/auth';
 import {
@@ -24,22 +20,23 @@ import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-cont
 
 /* ────────────────────────────────────────────────────────────── */
 /* helper: muestra link a la ubicación del proyecto              */
-const ProjectLocation = ({ location }) => (
+const ProjectLocation = React.memo(({ location }) => (
   <TouchableOpacity
+    style={styles.locationLink}
     onPress={() =>
       Linking.openURL(
         `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`
       )}
   >
-    <Text style={styles.locationText}>
-      Ver Ubicación: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
+    <Text style={styles.locationLinkText}>
+      <Ionicons name="map" size={16} color="#E53935" /> Ver en mapa: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
     </Text>
   </TouchableOpacity>
-);
+));
 /* ────────────────────────────────────────────────────────────── */
 
 export default function UserProjectDetail({ route, navigation }) {
-  const { project } = route.params;              // viene de UserProjects
+  const { project } = route.params;
   const auth = getAuth();
   const db = getFirestore();
   const insets = useSafeAreaInsets();
@@ -50,28 +47,27 @@ export default function UserProjectDetail({ route, navigation }) {
   const [totalHours, setTotalHours] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isJefe, setIsJefe] = useState(false);
+  const [processingAction, setProcessingAction] = useState(false);
 
   /* checklist / recount UI */
   const [showChecklist, setShowChecklist] = useState(false);
   const [showRecount, setShowRecount] = useState(false);
-  const [materialsList, setMaterialsList] = useState([]);   // inicial (mat)
-  const [toolsList, setToolsList] = useState([]);   // inicial (tool)
-  const [editItem, setEditItem] = useState(null); // {type,id}
+  const [editItem, setEditItem] = useState(null);
   const [tmpName, setTmpName] = useState('');
   const [tmpQty, setTmpQty] = useState('');
   const [itemUnit, setItemUnit] = useState('');
-  const [recount, setRecount] = useState({});   // id -> ±diff
+  const [recount, setRecount] = useState({});
   const [commentModal, setCommentModal] = useState(false);
   const [commentTxt, setCommentTxt] = useState('');
 
   /* geofence */
   const locationSub = useRef(null);
-  const threshold = 200;   // m
+  const threshold = 200;
 
-  /* hook: toda la lógica Firestore de los reportes (chunk 2) */
+  /* hook: toda la lógica Firestore de los reportes */
   const {
     checklist,
-    loadChecklist,       // alias de refresh
+    loadChecklist,
     recountMorning,
     recountEvening,
     comments,
@@ -81,56 +77,30 @@ export default function UserProjectDetail({ route, navigation }) {
     postWorkerComment,
   } = useDailyReport(project.id, auth.currentUser?.uid);
 
-  useEffect(() => {
-    if (!checklist || !checklist.list) return;
-
-    setMaterialsList(checklist.list.filter(i => i.type === 'mat'));
-    setToolsList(checklist.list.filter(i => i.type === 'tool'));
+  // Memoized filtered lists
+  const { materialsList, toolsList } = useMemo(() => {
+    if (!checklist || !checklist.list) return { materialsList: [], toolsList: [] };
+    return {
+      materialsList: checklist.list.filter(i => i.type === 'mat'),
+      toolsList: checklist.list.filter(i => i.type === 'tool'),
+    };
   }, [checklist]);
 
   /* ─── helpers fecha ───────────────────────────────────────── */
-  const todayString = () => {
+  const todayString = useCallback(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
+  }, []);
 
-  const distMeters = (lat1, lon1, lat2, lon2) => {
+  const distMeters = useCallback((lat1, lon1, lat2, lon2) => {
     const toRad = v => v * Math.PI / 180, R = 6371e3;
     const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
     const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  };
-  /* ─────────────────────────────────────────────────────────── */
-
-  /* ─── primer montaje: ver si ya hay Push-In activo ────────── */
-  useEffect(() => {
-    (async () => {
-      try {
-        const user = auth.currentUser;
-        if (!user) { setLoading(false); return; }
-
-        /* rol */
-        const aSnap = await getDoc(doc(db, 'proyectos', project.id, 'assignments', user.uid));
-        if (aSnap.exists() && aSnap.data().role === 'jefe') setIsJefe(true);
-
-        /* push-in previo? */
-        const hsnap = await getDoc(doc(db, 'usuarios', user.uid, 'horas', project.id, 'fechas', todayString()));
-        if (hsnap.exists() && !hsnap.data().pushOutTime) {
-          setPushInTime(hsnap.data().pushInTime);
-          watchDistance();
-        }
-        await loadChecklist();
-      } catch (e) {
-        console.error('init UserProjectDetail', e);
-      } finally {
-        setLoading(false);
-      }
-    })();
-    return () => locationSub.current?.remove();
   }, []);
 
   /* ─── geofence watch — se activa sólo con Push-In ─────────── */
-  const watchDistance = async () => {
+  const watchDistance = useCallback(async () => {
     locationSub.current?.remove();
     locationSub.current = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.Highest, distanceInterval: 10 },
@@ -145,50 +115,55 @@ export default function UserProjectDetail({ route, navigation }) {
           await doPushOut(true);
         }
       });
-  };
+  }, [distMeters, project.location]);
 
   /* ─── PUSH-IN ─────────────────────────────────────────────── */
-  const doPushIn = async () => {
+  const doPushIn = useCallback(async () => {
+    if (processingAction) return;
+    setProcessingAction(true);
+    
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') { Alert.alert('Permiso denegado'); return; }
+      if (status !== 'granted') { 
+        Alert.alert('Permiso denegado'); 
+        setProcessingAction(false);
+        return; 
+      }
+      
       const loc = await Location.getCurrentPositionAsync({});
       const d = distMeters(loc.coords.latitude, loc.coords.longitude,
         project.location.latitude, project.location.longitude);
-      if (d > threshold) { Alert.alert('Muy lejos del proyecto'); return; }
+      if (d > threshold) { 
+        Alert.alert('Muy lejos del proyecto'); 
+        setProcessingAction(false);
+        return; 
+      }
 
       const nowISO = new Date().toISOString();
       const user = auth.currentUser;
-      await setDoc(
-        doc(db, 'usuarios', user.uid, 'horas', project.id, 'fechas', todayString()),
-        {
-          pushInTime: nowISO, pushOutTime: null, totalHours: 0,
-          location: { latitude: loc.coords.latitude, longitude: loc.coords.longitude }
-        }
-      );
+      const userDocRef = doc(db, 'usuarios', user.uid, 'horas', project.id, 'fechas', todayString());
+      
+      await setDoc(userDocRef, {
+        pushInTime: nowISO, 
+        pushOutTime: null, 
+        totalHours: 0,
+        location: { latitude: loc.coords.latitude, longitude: loc.coords.longitude }
+      });
+      
       setPushInTime(nowISO);
       watchDistance();
       Alert.alert('Push In exitoso');
 
       if (isJefe) {
-        /* ----------------------------------------------------------------
-         * Decide what to show right after a successful Push-In
-         * ---------------------------------------------------------------- */
         const checklistExists = Boolean(checklist);
         const morningRecountExists = Boolean(recountMorning);
 
         if (!checklistExists) {
-          /* First time we ever work on this date → show checklist */
           setShowChecklist(true);
-
         } else if (!morningRecountExists) {
-          /* Checklist already exists but no morning recount yet
-             → we are in the MORNING phase */
           setRecountPhase('morning');
           setShowRecount(true);
-
         } else {
-          /* Morning recount already done → any later recount is EVENING */
           setRecountPhase('evening');
           setShowRecount(true);
         }
@@ -196,47 +171,67 @@ export default function UserProjectDetail({ route, navigation }) {
     } catch (e) {
       console.error(e);
       Alert.alert('Error', 'No se pudo hacer Push In');
+    } finally {
+      setProcessingAction(false);
     }
-  };
+  }, [auth.currentUser, db, distMeters, isJefe, project.id, project.location, todayString, watchDistance, checklist, recountMorning, processingAction]);
 
   /* ─── PUSH-OUT ────────────────────────────────────────────── */
-  const doPushOut = async (silent = false) => {
+  const doPushOut = useCallback(async (silent = false) => {
+    if (processingAction) return;
+    setProcessingAction(true);
+    
     try {
       const user = auth.currentUser;
       if (!user || !pushInTime) return;
 
       const nowISO = new Date().toISOString();
       const diffHrs = ((new Date(nowISO) - new Date(pushInTime)) / 3.6e6).toFixed(2);
-      await updateDoc(
-        doc(db, 'usuarios', user.uid, 'horas', project.id, 'fechas', todayString()),
-        { pushOutTime: nowISO, totalHours: Number(diffHrs) }
-      );
-      setTotalHours(diffHrs); setPushInTime(null);
-      locationSub.current?.remove(); locationSub.current = null;
+      const userDocRef = doc(db, 'usuarios', user.uid, 'horas', project.id, 'fechas', todayString());
+      
+      await updateDoc(userDocRef, {
+        pushOutTime: nowISO, 
+        totalHours: Number(diffHrs)
+      });
+      
+      setTotalHours(diffHrs); 
+      setPushInTime(null);
+      locationSub.current?.remove(); 
+      locationSub.current = null;
       if (!silent) Alert.alert('Push Out exitoso', `Total: ${diffHrs} h`);
-    } catch (e) { console.error(e); if (!silent) Alert.alert('Error', 'No se pudo hacer Push Out'); }
+    } catch (e) { 
+      console.error(e); 
+      if (!silent) Alert.alert('Error', 'No se pudo hacer Push Out'); 
+    } finally {
+      setProcessingAction(false);
+    }
     await Notifications.cancelAllScheduledNotificationsAsync();
-  };
+  }, [auth.currentUser, db, pushInTime, project.id, todayString, processingAction]);
 
   /* ─── comentarios cada 2 h ───────────────────────────────── */
-  const sendComment = async () => {
+  const sendComment = useCallback(async () => {
     if (!commentTxt.trim()) return;
-    await upsertComment(commentTxt.trim());
-    setCommentTxt(''); setCommentModal(false);
-  };
+    try {
+      await postWorkerComment(currentBlock(pushInTime).id, auth.currentUser, commentTxt.trim());
+      setCommentTxt(''); 
+      setCommentModal(false);
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo enviar el comentario');
+    }
+  }, [commentTxt, pushInTime, auth.currentUser, postWorkerComment]);
 
-  const handleReportBtn = () => {
+  const handleReportBtn = useCallback(() => {
     if (!pushInTime) return;
 
     const { id } = currentBlock(pushInTime);
     const blk = comments?.find(c => c.id === id) ?? {};
 
-    setCommentTxt(blk.jefeNote ?? '');   // ← preload previous text
+    setCommentTxt(blk.jefeNote ?? '');
     setCommentModal(true);
-  };
+  }, [pushInTime, comments]);
 
   /* ─── Checklist helpers (añadir / editar) ────────────────── */
-  const addOrUpdateItem = type => {
+  const addOrUpdateItem = useCallback((type) => {
     if (!tmpName || !tmpQty) {
       Alert.alert('Completa nombre y cantidad');
       return;
@@ -248,14 +243,12 @@ export default function UserProjectDetail({ route, navigation }) {
     const isEditing = Boolean(editItem?.id);
 
     if (isEditing) {
-      // --- update ---
       setter(list.map(it =>
         it.id === editItem.id
           ? { ...it, name: tmpName, qty: Number(tmpQty), unit: itemUnit }
           : it
       ));
     } else {
-      // --- add new ---
       setter([
         ...list,
         {
@@ -268,480 +261,840 @@ export default function UserProjectDetail({ route, navigation }) {
       ]);
     }
 
-    // clear form
     setEditItem(null);
     setTmpName('');
     setTmpQty('');
     setItemUnit('');
-  };
+  }, [editItem, materialsList, toolsList, tmpName, tmpQty, itemUnit]);
 
-  const deleteItem = (id, type) => {
+  const deleteItem = useCallback((id, type) => {
     const setter = type === 'mat' ? setMaterialsList : setToolsList;
     const list = type === 'mat' ? materialsList : toolsList;
     setter(list.filter(it => it.id !== id));
-  };
+  }, [materialsList, toolsList]);
 
   /* ─── SAVE checklist to Firestore ────────────────────────── */
-  const saveChecklistAndStartTimer = async (items) => {
-    await saveChecklist(items);
-    const now = new Date();
-  };
+  const saveChecklistAndStartTimer = useCallback(async (items) => {
+    try {
+      await saveChecklist(items);
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo guardar la lista');
+    }
+  }, [saveChecklist]);
+
+  /* ─── primer montaje: ver si ya hay Push-In activo ────────── */
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) { setLoading(false); return; }
+
+        // Optimización: Cargar rol y push-in en paralelo
+        const [aSnap, hsnap] = await Promise.all([
+          getDoc(doc(db, 'proyectos', project.id, 'assignments', user.uid)),
+          getDoc(doc(db, 'usuarios', user.uid, 'horas', project.id, 'fechas', todayString()))
+        ]);
+
+        if (aSnap.exists() && aSnap.data().role === 'jefe') setIsJefe(true);
+
+        if (hsnap.exists() && !hsnap.data().pushOutTime) {
+          setPushInTime(hsnap.data().pushInTime);
+          watchDistance();
+        }
+        
+        await loadChecklist();
+      } catch (e) {
+        console.error('init UserProjectDetail', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    init();
+    return () => locationSub.current?.remove();
+  }, [auth.currentUser, db, project.id, todayString, watchDistance, loadChecklist]);
 
   /* ─── quick UI shortcuts ─────────────────────────────────── */
-  const optionStyle = pushInTime ? styles.option2 : styles.option1;
-  const buttonLabel = pushInTime ? 'Push Out' : 'Push In';
-  const buttonAction = pushInTime ? doPushOut : doPushIn;
+  const { optionStyle, buttonLabel, buttonAction } = useMemo(() => ({
+    optionStyle: pushInTime ? styles.option2 : styles.option1,
+    buttonLabel: pushInTime ? 'Push Out' : 'Push In',
+    buttonAction: pushInTime ? doPushOut : doPushIn,
+  }), [pushInTime, doPushIn, doPushOut]);
 
   /* ─── LOADING first paint ────────────────────────────────── */
   if (loading) return (
-    <View style={styles.loading}><ActivityIndicator size="large" /><Text>Cargando…</Text></View>
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#E53935" />
+      <Text style={styles.loadingText}>Cargando proyecto...</Text>
+    </View>
   );
 
   /* ─────────────────────────────────────────────────────────── */
   return (
-    <>
-      <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
         {/* ——— Encabezado ——— */}
         <View style={styles.header}>
-          <Text style={styles.title}>{project.name}</Text>
-          <Text style={styles.subtitle}>{project.description}</Text>
+          <View style={styles.headerRow}>
+            <Text style={styles.headerTitle}>{project.name}</Text>
+            <Image 
+              source={require('../assets/biovizion.jpg')}
+              style={styles.headerIcon}
+            />
+          </View>
+          <Text style={styles.projectDescription}>{project.description}</Text>
           {project.location && <ProjectLocation location={project.location} />}
+        </View>
 
+        {/* ——— Push-In / Out ——— */}
+        <View style={styles.actionButtonsContainer}>
+          <TouchableOpacity
+            style={[styles.actionButton, optionStyle]}
+            onPress={buttonAction}
+            disabled={processingAction}
+          >
+            {processingAction ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name={pushInTime ? 'log-out' : 'log-in'} size={22} color="#fff" />
+                <Text style={styles.actionButtonText}>{buttonLabel}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          
+          {totalHours && (
+            <View style={styles.hoursContainer}>
+              <Text style={styles.hoursText}>Horas trabajadas:</Text>
+              <Text style={styles.hoursValue}>{totalHours} h</Text>
+            </View>
+          )}
+        </View>
+
+        {/* ——— Botones adicionales ——— */}
+        <View style={styles.secondaryButtonsContainer}>
           {!isJefe && pushInTime && (
             <TouchableOpacity
-              style={styles.commentBtn}
+              style={[styles.secondaryButton, styles.commentButton]}
               onPress={() => {
-                setCommentTxt('');          // start blank
-                setCommentModal(true);      // open modal (worker sees quick box only)
+                setCommentTxt('');
+                setCommentModal(true);
               }}
             >
-              <Text style={styles.btnLabel}>Añadir comentario</Text>
+              <MaterialIcons name="comment" size={20} color="#fff" />
+              <Text style={styles.secondaryButtonText}>Comentario</Text>
             </TouchableOpacity>
           )}
 
           {isJefe && pushInTime && (
             <>
               <TouchableOpacity
-                style={styles.reportBtn}
+                style={[styles.secondaryButton, styles.reportButton]}
                 onPress={handleReportBtn}
               >
-                <Text style={styles.btnLabel}>Reportes del proyecto</Text>
+                <MaterialIcons name="assignment" size={20} color="#fff" />
+                <Text style={styles.secondaryButtonText}>Reportes</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.commentBtn}
+                style={[styles.secondaryButton, styles.recountButton]}
                 onPress={() => {
                   setRecountPhase('evening');
                   setShowRecount(true);
                 }}
               >
-                <Text style={styles.btnLabel}>Recuento de materiales</Text>
+                <MaterialIcons name="inventory" size={20} color="#fff" />
+                <Text style={styles.secondaryButtonText}>Recuento</Text>
               </TouchableOpacity>
             </>
-
           )}
         </View>
 
-        {/* ——— Push-In / Out ——— */}
-        <View style={styles.optionsContainer}>
-          <TouchableOpacity
-            style={[styles.optionCard, optionStyle]}
-            onPress={buttonAction}
-          >
-            <Ionicons name={pushInTime ? 'log-out' : 'log-in'} size={32} color="#fff" />
-            <Text style={styles.optionText}>{buttonLabel}</Text>
-          </TouchableOpacity>
-          {totalHours && <Text style={styles.totalHours}>Horas trabajadas: {totalHours} h</Text>}
-        </View>
-      </SafeAreaView>
+        {/* Información adicional del proyecto */}
+        {project.additionalInfo && (
+          <View style={styles.infoCard}>
+            <Text style={styles.infoTitle}>Información del Proyecto</Text>
+            <Text style={styles.infoText}>{project.additionalInfo}</Text>
+          </View>
+        )}
+      </ScrollView>
 
-      {/* ——— Checklist inicial ——— */}
+      {/* ——— Modales ——— */}
+      {/* Checklist inicial */}
       <Modal
         visible={showChecklist}
         animationType="slide"
         onRequestClose={() => { setShowChecklist(false); setEditItem(null); }}
       >
-
-        <View style={[styles.modalWrap, { paddingTop: insets.top + 12 }]}>
-          <Text style={styles.modalTitle}>Lista inicial de materiales / herramientas</Text>
-
-          <FlatList
-            data={[...materialsList, ...toolsList]}
-            keyExtractor={it => it.id}
-            renderItem={({ item }) => (
-              <View style={styles.row}>
-                <Text>{item.name} – {item.qty} {item.unit || ''}</Text>
-                <View style={styles.rowActions}>
-                  <TouchableOpacity onPress={() => { setEditItem(item); setTmpName(item.name); setTmpQty(String(item.qty)); setItemUnit(item.unit || ''); }}>
-                    <Ionicons name="create-outline" size={20} color="#4a76ff" />
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => deleteItem(item.id, item.type)}>
-                    <Ionicons name="trash-outline" size={20} color="#e74c3c" style={{ marginLeft: 10 }} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-            ListEmptyComponent={<Text style={{ textAlign: 'center', color: '#666' }}>Sin ítems…</Text>}
-          />
-
-
-          <TouchableOpacity onPress={() => setEditItem({ type: 'mat' })}>
-            <Text style={styles.addBtn}>＋ Añadir material</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setEditItem({ type: 'tool' })}>
-            <Text style={styles.addBtn}>＋ Añadir herramienta</Text>
-          </TouchableOpacity>
-
-
-          {editItem && (
-            <View style={styles.editBox}>
-              <TextInput
-                placeholder="Nombre"
-                style={styles.input}
-                value={tmpName}
-                onChangeText={setTmpName}
-              />
-              <View style={{ flexDirection: 'row' }}>
-                <TextInput
-                  placeholder="Cantidad"
-                  style={[styles.input, { flex: 1, marginRight: 6 }]}
-                  keyboardType="numeric"
-                  value={tmpQty}
-                  onChangeText={setTmpQty}
-                />
-                <TextInput
-                  placeholder="Unidad (opcional)"
-                  style={[styles.input, { flex: 1 }]}
-                  value={itemUnit}
-                  onChangeText={setItemUnit}
-                />
-              </View>
-              <TouchableOpacity
-                style={[styles.saveBtn, { marginTop: 5 }]}
-                onPress={() => addOrUpdateItem(editItem.type)}
-              >
-                <Text style={styles.saveLabel}>{editItem.id ? 'Actualizar' : 'Añadir'}</Text>
+        <SafeAreaView style={styles.modalSafeArea}>
+          <ScrollView contentContainerStyle={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Lista de materiales/herramientas</Text>
+              <TouchableOpacity onPress={() => setShowChecklist(false)}>
+                <Ionicons name="close" size={28} color="#E53935" />
               </TouchableOpacity>
             </View>
-          )}
 
-          <TouchableOpacity
-            style={[styles.saveBtn, { marginTop: 20 }]}
-            onPress={async () => {
-              await saveChecklistAndStartTimer([...materialsList, ...toolsList]);
-              setShowChecklist(false);
-            }}
-          >
-            <Text style={styles.saveLabel}>Guardar lista</Text>
-          </TouchableOpacity>
-        </View>
+            <FlatList
+              data={[...materialsList, ...toolsList]}
+              keyExtractor={it => it.id}
+              renderItem={({ item }) => (
+                <View style={styles.listItem}>
+                  <Text style={styles.listItemText}>{item.name} – {item.qty} {item.unit || ''}</Text>
+                  <View style={styles.listItemActions}>
+                    <TouchableOpacity 
+                      style={styles.iconButton}
+                      onPress={() => { 
+                        setEditItem(item); 
+                        setTmpName(item.name); 
+                        setTmpQty(String(item.qty)); 
+                        setItemUnit(item.unit || ''); 
+                      }}
+                    >
+                      <Ionicons name="create-outline" size={20} color="#4a76ff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.iconButton}
+                      onPress={() => deleteItem(item.id, item.type)}
+                    >
+                      <Ionicons name="trash-outline" size={20} color="#e74c3c" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+              ListEmptyComponent={
+                <Text style={styles.emptyListText}>No hay ítems en la lista</Text>
+              }
+            />
+
+            <View style={styles.addButtonsContainer}>
+              <TouchableOpacity 
+                style={styles.addButton}
+                onPress={() => setEditItem({ type: 'mat' })}
+              >
+                <Text style={styles.addButtonText}>＋ Material</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.addButton}
+                onPress={() => setEditItem({ type: 'tool' })}
+              >
+                <Text style={styles.addButtonText}>＋ Herramienta</Text>
+              </TouchableOpacity>
+            </View>
+
+            {editItem && (
+              <View style={styles.editForm}>
+                <TextInput
+                  placeholder="Nombre"
+                  style={styles.editInput}
+                  value={tmpName}
+                  onChangeText={setTmpName}
+                />
+                <View style={styles.quantityRow}>
+                  <TextInput
+                    placeholder="Cantidad"
+                    style={[styles.editInput, styles.quantityInput]}
+                    keyboardType="numeric"
+                    value={tmpQty}
+                    onChangeText={setTmpQty}
+                  />
+                  <TextInput
+                    placeholder="Unidad (opcional)"
+                    style={[styles.editInput, styles.unitInput]}
+                    value={itemUnit}
+                    onChangeText={setItemUnit}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={styles.saveEditButton}
+                  onPress={() => addOrUpdateItem(editItem.type)}
+                >
+                  <Text style={styles.saveEditButtonText}>
+                    {editItem.id ? 'Actualizar' : 'Añadir'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={async () => {
+                await saveChecklistAndStartTimer([...materialsList, ...toolsList]);
+                setShowChecklist(false);
+              }}
+            >
+              <Text style={styles.saveButtonText}>Guardar lista</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
 
-      {/* ——— Comentarios ——— */}
+      {/* Comentarios */}
       <Modal
         visible={commentModal}
         animationType="slide"
         onRequestClose={() => setCommentModal(false)}
       >
         <KeyboardAvoidingView
-          style={[styles.modalWrap, { paddingTop: insets.top + 12 }]}
+          style={styles.modalSafeArea}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-            <TouchableOpacity onPress={() => setCommentModal(false)}>
-              <Ionicons name="close" size={28} color="#2c3e50" />
-            </TouchableOpacity>
-          </View>
-          {isJefe && (
-            <>
-              <Text style={styles.modalTitle}>Bitácora en curso</Text>
+          <ScrollView contentContainerStyle={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {isJefe ? 'Bitácora del proyecto' : 'Añadir comentario'}
+              </Text>
+              <TouchableOpacity onPress={() => setCommentModal(false)}>
+                <Ionicons name="close" size={28} color="#E53935" />
+              </TouchableOpacity>
+            </View>
 
-              {(() => {
-                if (!pushInTime) return null;
-                const { id: startId, startAt } = currentBlock(pushInTime);
-                const blk = comments?.find(c => c.id === startId) ?? {};
-                const locked =
-                  blk.locked ||
-                  Date.now() - startAt.getTime() > 2 * 60 * 60 * 1000;
+            {isJefe ? (
+              <>
+                {(() => {
+                  if (!pushInTime) return null;
+                  const { id: startId, startAt } = currentBlock(pushInTime);
+                  const blk = comments?.find(c => c.id === startId) ?? {};
+                  const locked =
+                    blk.locked ||
+                    Date.now() - startAt.getTime() > 2 * 60 * 60 * 1000;
 
-                return (
-                  <>
-                    <TextInput
-                      style={[
-                        styles.input,
-                        { height: 140, textAlignVertical: 'top' },
-                      ]}
-                      multiline
-                      editable={!locked}
-                      placeholder="Describe las actividades…"
-                      value={commentTxt !== '' ? commentTxt : blk.jefeNote ?? ''}
-                      onChangeText={setCommentTxt}
-                    />
+                  return (
+                    <>
+                      <TextInput
+                        style={styles.commentInput}
+                        multiline
+                        editable={!locked}
+                        placeholder="Describe las actividades..."
+                        value={commentTxt !== '' ? commentTxt : blk.jefeNote ?? ''}
+                        onChangeText={setCommentTxt}
+                      />
 
-                    <TouchableOpacity
-                      style={styles.saveBtn}
-                      disabled={locked}
-                      onPress={async () => {
-                        await saveJefeNote(pushInTime, commentTxt, locked);
-                        if (locked)
-                          Alert.alert('Bloque cerrado', 'Se inició uno nuevo.');
-                        /* keep text so jefe can continue editing */
-                      }}
-                    >
-                      <Text style={styles.saveLabel}>
-                        {locked ? 'Bloque cerrado' : 'Guardar / Actualizar'}
+                      <TouchableOpacity
+                        style={[styles.saveButton, locked && styles.disabledButton]}
+                        disabled={locked}
+                        onPress={async () => {
+                          await saveJefeNote(pushInTime, commentTxt, locked);
+                          if (locked)
+                            Alert.alert('Bloque cerrado', 'Se inició uno nuevo.');
+                        }}
+                      >
+                        <Text style={styles.saveButtonText}>
+                          {locked ? 'Bloque cerrado' : 'Guardar'}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  );
+                })()}
+
+                <SectionList
+                  style={styles.commentList}
+                  sections={comments?.map(c => ({
+                    title: c.id + (c.locked ? '' : ' (abierto)'),
+                    data: c.workers ?? [],
+                    jefe: c.jefeNote ?? '—',
+                  })) ?? []}
+                  keyExtractor={(_, i) => String(i)}
+                  renderSectionHeader={({ section }) => (
+                    <>
+                      <Text style={styles.sectionHeader}>{section.title}</Text>
+                      <Text style={styles.sectionSubheader}>
+                        {section.jefe}
                       </Text>
-                    </TouchableOpacity>
-                  </>
-                );
-              })()}
-            </>
-          )}
-
-          {/* 2. Worker quick comment */}
-          {!isJefe && (
-            <>
-              <Text style={[styles.modalTitle, { marginTop: 20 }]}>Tu comentario</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    </>
+                  )}
+                  renderItem={({ item }) => (
+                    <View style={styles.workerComment}>
+                      <Text style={styles.workerName}>{item.name}:</Text>
+                      <Text style={styles.workerText}>{item.text}</Text>
+                    </View>
+                  )}
+                />
+              </>
+            ) : (
+              <>
                 <TextInput
-                  style={[styles.input, { flex: 1, marginRight: 10, height: 100, textAlignVertical:'top', marginRight:10}]}
-                  placeholder="Escribe algo…"
+                  style={styles.commentInput}
+                  placeholder="Escribe tu comentario..."
                   value={commentTxt}
                   onChangeText={setCommentTxt}
+                  multiline
                 />
                 <TouchableOpacity
-                  style={styles.qtyBtn}
-                  onPress={async () => {
-                    const { id } = currentBlock(pushInTime);
-                    await postWorkerComment(id, auth.currentUser, commentTxt);
-                    setCommentTxt('');
-                  }}
+                  style={styles.saveButton}
+                  onPress={sendComment}
                 >
-                  <Ionicons name="send" size={20} color="#fff" />
+                  <Text style={styles.saveButtonText}>Enviar</Text>
                 </TouchableOpacity>
-              </View>
-            </>
-          )}
-
-          {/* 3. Timeline of previous blocks */}
-          {isJefe && (<SectionList
-            style={{ marginTop: 30 }}
-            sections={comments?.map(c => ({
-              title: c.id + (c.locked ? '' : ' (abierto)'),
-              data: c.workers ?? [],
-              jefe: c.jefeNote ?? '—',
-            })) ?? []}
-            keyExtractor={(_, i) => String(i)}
-            renderSectionHeader={({ section }) => (
-              <>
-                <Text style={styles.sectionHeader}>{section.title}</Text>
-                <Text style={{ fontStyle: 'italic', marginBottom: 4 }}>
-                  {section.jefe}
-                </Text>
               </>
             )}
-            renderItem={({ item }) => (
-              <Text style={{ marginLeft: 12 }}>• {item.name}: {item.text}</Text>
-            )}
-          />
-          )}
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ——— Recuento fin de día ——— */}
+      {/* Recuento fin de día */}
       <Modal
         visible={showRecount}
         animationType="slide"
         onRequestClose={() => setShowRecount(false)}
       >
-        <View style={styles.modalWrap}>
-          <Text style={styles.modalTitle}>Recuento de materiales</Text>
+        <SafeAreaView style={styles.modalSafeArea}>
+          <ScrollView contentContainerStyle={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Recuento {recountPhase === 'morning' ? 'matutino' : 'vespertino'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowRecount(false)}>
+                <Ionicons name="close" size={28} color="#E53935" />
+              </TouchableOpacity>
+            </View>
 
-          <SectionList
-            sections={[
-              { title: 'Materiales', data: materialsList },
-              { title: 'Herramientas', data: toolsList },
-            ]}
-            keyExtractor={it => it.id}
-            renderSectionHeader={({ section: { title } }) => (
-              <Text style={styles.sectionHeader}>{title}</Text>
-            )}
-            renderItem={({ item }) => {
-              // current delta for this item (0 = OK)
-              const diff = recount[item.id] ?? 0;
+            <SectionList
+              sections={[
+                { title: 'Materiales', data: materialsList },
+                { title: 'Herramientas', data: toolsList },
+              ]}
+              keyExtractor={it => it.id}
+              renderSectionHeader={({ section: { title } }) => (
+                <Text style={styles.sectionHeader}>{title}</Text>
+              )}
+              renderItem={({ item }) => {
+                const diff = recount[item.id] ?? 0;
 
-              /* toggle ✅ / ⬜  ---------------------------------------------------- */
-              const toggleChecked = () => {
-                setRecount(p => ({
-                  ...p,
-                  [item.id]: diff === 0 ? -item.qty : 0,   // 0 ↔︎ -fullQty (missing all)
-                }));
-              };
-
-              return (
-                <View style={styles.row}>
-                  {/* --- check-box --- */}
-                  <TouchableOpacity style={styles.chk} onPress={toggleChecked}>
-                    <Ionicons
-                      name={diff === 0 ? 'checkbox-outline' : 'square-outline'}
-                      size={22}
-                      color={diff === 0 ? '#2ecc71' : '#95a5a6'}
-                    />
-                  </TouchableOpacity>
-
-                  {/* --- label --- */}
-                  <Text style={styles.rowLabel}>
-                    {item.name} – {item.qty} {item.unit || ''}
-                  </Text>
-
-                  {/* --- – / Δ / +  --- */}
-                  <View style={styles.deltaBox}>
-                    <TouchableOpacity
-                      style={styles.qtyBtn}
-                      onPress={() =>
-                        setRecount(p => ({ ...p, [item.id]: diff - 1 }))
-                      }
+                return (
+                  <View style={styles.recountItem}>
+                    <TouchableOpacity 
+                      style={styles.checkbox}
+                      onPress={() => {
+                        setRecount(p => ({
+                          ...p,
+                          [item.id]: diff === 0 ? -item.qty : 0,
+                        }));
+                      }}
                     >
-                      <Ionicons name="remove" size={18} color="#fff" />
+                      <Ionicons
+                        name={diff === 0 ? 'checkbox-outline' : 'square-outline'}
+                        size={22}
+                        color={diff === 0 ? '#2ecc71' : '#95a5a6'}
+                      />
                     </TouchableOpacity>
 
-                    <Text style={styles.deltaText}>{diff}</Text>
+                    <Text style={styles.recountItemText}>
+                      {item.name} – {item.qty} {item.unit || ''}
+                    </Text>
 
-                    <TouchableOpacity
-                      style={styles.qtyBtn}
-                      onPress={() =>
-                        setRecount(p => ({ ...p, [item.id]: diff + 1 }))
-                      }
-                    >
-                      <Ionicons name="add" size={18} color="#fff" />
-                    </TouchableOpacity>
+                    <View style={styles.quantityControls}>
+                      <TouchableOpacity
+                        style={styles.quantityButton}
+                        onPress={() =>
+                          setRecount(p => ({ ...p, [item.id]: diff - 1 }))
+                        }
+                      >
+                        <Ionicons name="remove" size={18} color="#fff" />
+                      </TouchableOpacity>
+
+                      <Text style={styles.quantityValue}>{diff}</Text>
+
+                      <TouchableOpacity
+                        style={styles.quantityButton}
+                        onPress={() =>
+                          setRecount(p => ({ ...p, [item.id]: diff + 1 }))
+                        }
+                      >
+                        <Ionicons name="add" size={18} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-              );
-            }}
-            ListEmptyComponent={
-              <Text style={styles.emptyText}>Sin ítems…</Text>
-            }
-          />
+                );
+              }}
+              ListEmptyComponent={
+                <Text style={styles.emptyListText}>No hay ítems para recuento</Text>
+              }
+            />
 
-          <TouchableOpacity
-            style={[styles.saveBtn, { marginTop: 20 }]}
-            onPress={async () => {
-              const diffArr = Object.entries(recount)
-                .filter(([, v]) => v !== 0)
-                .map(([id, diff]) => ({ id, diff }));
-              await saveRecount(diffArr, recountPhase);
-              setRecount({});
-              setShowRecount(false);
-            }}
-          >
-            <Text style={styles.saveLabel}>Guardar recuento</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={async () => {
+                const diffArr = Object.entries(recount)
+                  .filter(([, v]) => v !== 0)
+                  .map(([id, diff]) => ({ id, diff }));
+                await saveRecount(diffArr, recountPhase);
+                setRecount({});
+                setShowRecount(false);
+              }}
+            >
+              <Text style={styles.saveButtonText}>Guardar recuento</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
-    </>
+    </SafeAreaView>
   );
 }
 
 /* ───────────────────────── estilos ─────────────────────────── */
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa' },
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { padding: 20, paddingTop: 40, backgroundColor: '#fff', borderBottomLeftRadius: 20, borderBottomRightRadius: 20, marginBottom: 20 },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#2c3e50' },
-  subtitle: { fontSize: 16, color: '#7f8c8d', marginTop: 5 },
-  locationText: { fontSize: 16, color: '#4a76ff', textDecorationLine: 'underline', marginTop: 10 },
-
-  optionsContainer: { flex: 1, paddingHorizontal: 20, justifyContent: 'center' },
-  optionCard: { height: 100, borderRadius: 15, marginVertical: 10, padding: 20, flexDirection: 'row', alignItems: 'center', elevation: 5 },
-  option1: { backgroundColor: '#3498db' }, option2: { backgroundColor: '#2ecc71' },
-  optionText: { color: '#fff', fontSize: 20, fontWeight: '600', marginLeft: 15 },
-  totalHours: { fontSize: 18, fontWeight: '600', marginTop: 20, textAlign: 'center' },
-
-  /* botones header */
-  reportBtn: {
-    marginTop: 15,
-    paddingVertical: 12,
-    borderRadius: 8,
+  // Estilos base del contenedor
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#121212',
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    paddingBottom: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#3498db',   // blue matches your palette
+    backgroundColor: '#121212',
   },
-  commentBtn: { marginTop: 10, backgroundColor: '#3498db', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  btnLabel: { color: '#fff', fontSize: 16, fontWeight: '600' },
-
-  /* modal genérico */
-  modalWrap: { flex: 1, padding: 20, backgroundColor: '#fff' },
-  rowActions: { flexDirection: 'row', alignItems: 'center' },
-  addBtn: { color: '#4a76ff', marginVertical: 6 },
-  editBox: { marginTop: 10, padding: 10, backgroundColor: '#f0f4ff', borderRadius: 8 },
-  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 15, backgroundColor: '#fafafa', fontSize: 16 },
-  saveBtn: { backgroundColor: '#2ecc71', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  saveLabel: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-
-  qtyBtn: { backgroundColor: '#4a76ff', borderRadius: 20, padding: 6 },
-  editBox: {             // en tu objeto styles
-    marginTop: 10, padding: 10,
-    backgroundColor: '#f0f4ff',
-    borderLeftWidth: 4, borderLeftColor: '#4a76ff',
-    borderRadius: 8
-  },
-  sectionHeader: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#34495e',
+  loadingText: {
+    color: '#FFFFFF',
     marginTop: 10,
-    marginBottom: 4,
-  },
-  rowLabel: { flex: 1, fontSize: 16, color: '#2c3e50' },
-
-  iconBtn: {
-    padding: 6,          // ▶︎ bigger touch-area
-    borderRadius: 6,
   },
 
-  emptyText: {
-    textAlign: 'center',
-    color: '#95a5a6',
-    marginTop: 20,
+  // Encabezado
+  header: {
+    padding: 20,
+    paddingTop: 10,
+    marginBottom: 15,
   },
-
-  modalTitle: {
-    fontSize: 22,
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  headerTitle: {
+    fontSize: 24,
     fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#2c3e50',
-    marginTop: 10,        // ▼ pushes it down from the status bar
+    color: '#FFFFFF',
+    flex: 1,
+  },
+  headerIcon: {
+    width: 40,
+    height: 40,
+    marginLeft: 15,
+  },
+  projectDescription: {
+    fontSize: 16,
+    color: '#CCCCCC',
+    marginBottom: 15,
+    lineHeight: 22,
+  },
+  locationLink: {
+    marginTop: 5,
+    alignSelf: 'flex-start',
+  },
+  locationLinkText: {
+    color: '#E53935',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+
+  // Botones principales
+  actionButtonsContainer: {
+    marginHorizontal: 20,
+    marginBottom: 15,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 15,
+    borderRadius: 10,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  option1: {
+    backgroundColor: '#E53935', // Rojo para Push In
+  },
+  option2: {
+    backgroundColor: '#1E88E5', // Azul para Push Out
+  },
+  actionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    marginLeft: 10,
+  },
+  hoursContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    padding: 12,
+    backgroundColor: '#1E1E1E',
+    borderRadius: 8,
+  },
+  hoursText: {
+    color: '#CCCCCC',
+    fontSize: 16,
+  },
+  hoursValue: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+
+  // Botones secundarios
+  secondaryButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginHorizontal: 20,
     marginBottom: 20,
   },
-  row: {
+  secondaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 0.5,
-    borderColor: '#e0e0e0',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    width: '30%',
+    elevation: 2,
+  },
+  secondaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 5,
+  },
+  commentButton: {
+    backgroundColor: '#43A047',
+  },
+  reportButton: {
+    backgroundColor: '#5C6BC0',
+  },
+  recountButton: {
+    backgroundColor: '#FFA000',
   },
 
-  chk: { paddingRight: 8 },
+  // Tarjeta de información
+  infoCard: {
+    backgroundColor: '#1E1E1E',
+    marginHorizontal: 20,
+    padding: 15,
+    borderRadius: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#E53935',
+  },
+  infoTitle: {
+    color: '#E53935',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  infoText: {
+    color: '#CCCCCC',
+    fontSize: 14,
+    lineHeight: 20,
+  },
 
-  rowLabel: { flex: 1, fontSize: 15, color: '#2c3e50' },
-
-  deltaBox: {
+  // Estilos de modales
+  modalSafeArea: {
+    flex: 1,
+    backgroundColor: '#121212',
+  },
+  modalContainer: {
+    flexGrow: 1,
+    padding: 20,
+    paddingBottom: 30,
+  },
+  modalHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    flex: 1,
   },
 
-  qtyBtn: {
-    backgroundColor: '#4a76ff',
-    borderRadius: 18,
+  // Listas
+  listItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    backgroundColor: '#1E1E1E',
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  listItemText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    flex: 1,
+  },
+  listItemActions: {
+    flexDirection: 'row',
+    marginLeft: 10,
+  },
+  iconButton: {
     padding: 6,
-    marginHorizontal: 2,
+    marginLeft: 10,
+  },
+  emptyListText: {
+    textAlign: 'center',
+    color: '#AAAAAA',
+    marginVertical: 20,
+    fontSize: 16,
   },
 
-  deltaText: {
-    width: 34,
-    textAlign: 'center',
+  // Formularios de edición
+  editForm: {
+    backgroundColor: '#1E1E1E',
+    padding: 15,
+    borderRadius: 10,
+    marginTop: 15,
+  },
+  editInput: {
+    backgroundColor: '#121212',
+    color: '#FFFFFF',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+    fontSize: 16,
+  },
+  quantityRow: {
+    flexDirection: 'row',
+  },
+  quantityInput: {
+    flex: 1,
+    marginRight: 10,
+  },
+  unitInput: {
+    flex: 1,
+  },
+  saveEditButton: {
+    backgroundColor: '#E53935',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  saveEditButtonText: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-    color: '#34495e',
+  },
+
+  // Botones de añadir
+  addButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  addButton: {
+    backgroundColor: '#1E1E1E',
+    padding: 10,
+    borderRadius: 8,
+    width: '48%',
+    alignItems: 'center',
+  },
+  addButtonText: {
+    color: '#E53935',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+
+  // Comentarios
+  commentInput: {
+    backgroundColor: '#1E1E1E',
+    color: '#FFFFFF',
+    padding: 15,
+    borderRadius: 10,
+    minHeight: 120,
+    textAlignVertical: 'top',
+    fontSize: 16,
+    marginBottom: 15,
+  },
+  commentList: {
+    marginTop: 20,
+  },
+  sectionHeader: {
+    color: '#E53935',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 15,
+    marginBottom: 5,
+  },
+  sectionSubheader: {
+    color: '#CCCCCC',
+    fontStyle: 'italic',
+    marginBottom: 10,
+  },
+  workerComment: {
+    backgroundColor: '#1E1E1E',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  workerName: {
+    color: '#E53935',
+    fontWeight: 'bold',
+    marginBottom: 3,
+  },
+  workerText: {
+    color: '#FFFFFF',
+  },
+
+  // Recuento
+  recountItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    backgroundColor: '#1E1E1E',
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  checkbox: {
+    marginRight: 10,
+  },
+  recountItemText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    flex: 1,
+  },
+  quantityControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  quantityButton: {
+    backgroundColor: '#E53935',
+    borderRadius: 20,
+    padding: 6,
+  },
+  quantityValue: {
+    color: '#FFFFFF',
+    width: 30,
+    textAlign: 'center',
+    fontSize: 16,
+  },
+
+  // Botones de guardar
+  saveButton: {
+    backgroundColor: '#E53935',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  disabledButton: {
+    backgroundColor: '#666666',
   },
 });

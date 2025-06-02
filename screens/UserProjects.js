@@ -1,13 +1,14 @@
-// screens/UserProjects.js
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Linking, SafeAreaView, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Linking, SafeAreaView, ScrollView, Image } from 'react-native';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, collection, getDocs, query, where, doc, getDoc, setDoc } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-import { Alert } from 'react-native';  // fallback
+import { Alert } from 'react-native';
+import { ImageBackground } from 'react-native';
+
 
 export default function UserProjects() {
   const [projects, setProjects] = useState([]);
@@ -83,10 +84,9 @@ export default function UserProjects() {
               title: 'Ubicación enviada',
               body: 'Su ubicación ha sido enviada al administrador.',
             },
-            trigger: null, // se manda la notificación inmediatamente
+            trigger: null,
           });
         } catch (e) {
-          // si no hay notificaciones, se muestra una alerta
           Alert.alert(
             'Ubicación enviada',
             'Su ubicación ha sido enviada al administrador.'
@@ -102,33 +102,55 @@ export default function UserProjects() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" />
-        <Text>Cargando proyectos...</Text>
+        <ActivityIndicator size="large" color="#E53935" />
+        <Text style={styles.loadingText}>Cargando proyectos...</Text>
       </View>
     );
   }
 
   return (
+  <ImageBackground
+    source={require('../assets/fondo8.jpg')} // Cambia por tu imagen
+    style={{ flex: 1 }}
+    resizeMode="cover"
+  >
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.container}>
-          <TouchableOpacity
-            style={styles.locationButton}
-            onPress={getUserLocation}
-          >
-            <Ionicons name="location" size={20} color="#fff" />
-            <Text style={styles.locationButtonText}>Compartir mi ubicación</Text>
-          </TouchableOpacity>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Mis Proyectos</Text>
+            <Image 
+              source={require('../assets/biovizion.jpg')} 
+              style={styles.headerIcon}
+            />
+          </View>
 
-                <TouchableOpacity
-                  style={styles.locationButton}
-                  onPress={() => navigation.navigate('ChatScreen')}
-                >
-                  <Text style={styles.buttonText}>chat entre personas</Text>
-                </TouchableOpacity>
+          {/* Action Buttons */}
+          <View style={styles.actionButtonsContainer}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.locationButton]}
+              onPress={getUserLocation}
+            >
+              <Ionicons name="location" size={22} color="#fff" />
+              <Text style={styles.actionButtonText}>Compartir ubicación</Text>
+            </TouchableOpacity>
 
+            <TouchableOpacity
+              style={[styles.actionButton, styles.chatButton]}
+              onPress={() => navigation.navigate('ChatScreen')}
+            >
+              <MaterialIcons name="chat" size={22} color="#fff" />
+              <Text style={styles.actionButtonText}>Chat</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Projects List */}
           {projects.length === 0 ? (
-            <Text style={styles.noProjectsText}>No tienes proyectos asignados</Text>
+            <View style={styles.emptyState}>
+              <Ionicons name="folder-open" size={50} color="#E53935" />
+              <Text style={styles.noProjectsText}>No tienes proyectos asignados</Text>
+            </View>
           ) : (
             projects.map((proj) => (
               <TouchableOpacity
@@ -136,8 +158,12 @@ export default function UserProjects() {
                 style={styles.projectCard}
                 onPress={() => handleProjectPress(proj)}
               >
-                <Text style={styles.projectTitle}>{proj.name}</Text>
+                <View style={styles.projectHeader}>
+                  <Ionicons name="document-text" size={24} color="#E53935" />
+                  <Text style={styles.projectTitle}>{proj.name}</Text>
+                </View>
                 <Text style={styles.projectDescription}>{proj.description}</Text>
+
                 {proj.location && (
                   <TouchableOpacity
                     style={styles.locationLink}
@@ -147,7 +173,7 @@ export default function UserProjects() {
                     }}
                   >
                     <Text style={styles.locationLinkText}>
-                      <Ionicons name="map" size={16} color="#3498db" /> Ver en mapa
+                      <Ionicons name="map" size={16} color="#E53935" /> Ver en mapa
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -157,13 +183,14 @@ export default function UserProjects() {
         </View>
       </ScrollView>
     </SafeAreaView>
-  );
+  </ImageBackground>
+);
+
 }
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   scrollContainer: {
     flexGrow: 1,
@@ -173,56 +200,116 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(18, 18, 18, 0.8)', // Añadida transparencia
+  },
+  loadingText: {
+    color: '#FFFFFF',
+    marginTop: 10,
   },
   container: {
     flex: 1,
     padding: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', // Añadida transparencia
   },
-  locationButton: {
-    backgroundColor: '#3498db',
-    padding: 15,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 25,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)', // Añadida transparencia
+    padding: 10,
     borderRadius: 8,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  headerIcon: {
+    width: 40,
+    height: 40,
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
-    elevation: 2,
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    width: '48%',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
-  locationButtonText: {
-    color: '#fff',
-    fontSize: 16,
+  locationButton: {
+    backgroundColor: 'rgba(229, 57, 53, 0.8)', // Añadida transparencia
+  },
+  chatButton: {
+    backgroundColor: 'rgba(30, 136, 229, 0.8)', // Añadida transparencia
+  },
+  actionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
     fontWeight: '600',
-    marginLeft: 10,
+    marginLeft: 8,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)', // Añadida transparencia
+    borderRadius: 10,
   },
   noProjectsText: {
     textAlign: 'center',
-    marginTop: 20,
+    marginTop: 15,
     fontSize: 16,
-    color: '#666',
+    color: '#AAAAAA',
   },
   projectCard: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(30, 30, 30, 0.7)', // Añadida transparencia
     padding: 16,
     marginBottom: 15,
-    borderRadius: 8,
+    borderRadius: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#E53935',
     elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  projectHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
   },
   projectTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#333',
+    color: '#FFFFFF',
+    marginLeft: 10,
   },
   projectDescription: {
     fontSize: 14,
-    color: '#666',
+    color: '#CCCCCC',
     marginBottom: 10,
+    lineHeight: 20,
   },
   locationLink: {
     marginTop: 8,
+    alignSelf: 'flex-start',
   },
   locationLinkText: {
-    color: '#3498db',
+    color: '#E53935',
     fontSize: 14,
+    fontWeight: '500',
   },
 });
