@@ -4,7 +4,7 @@
     "slug": "PunchInOutMobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/biovozopm.jpg",
+    "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -13,7 +13,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Permite acceder a tus fotos para seleccionar una imagen de perfil",
+        "NSPhotoLibraryAddUsageDescription": "Permite guardar imágenes en tu galería"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -21,13 +25,24 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.edwinnunez.PunchInOutMobile"
+      "package": "com.edwinnunez.PunchInOutMobile",
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "La aplicación necesita acceso a tus fotos para que puedas seleccionar una imagen de perfil."
+        }
+      ]
     ],
     "extra": {
       "eas": {

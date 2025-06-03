@@ -36,6 +36,7 @@ import ReporteSemanal from './screens/ReporteHoras/ReporteSemanal';
 import ReporteMensual from './screens/ReporteHoras/ReporteMensual';
 import ReporteProyectos from './screens/ReporteHoras/ReporteProyectos';
 import ChatScreen from './screens/UserChat/Chat';
+import ProfilePictureUploader from './screens/ProfilePictureUploader';
 
 
 
@@ -86,6 +87,7 @@ export default function App() {
         <Stack.Screen name="MapPage" component={MapaPage} />
         <Stack.Screen name="UserProjects" component={UserProjects} />
         <Stack.Screen name="UserProjectDetail" component={UserProjectDetail} />
+                <Stack.Screen name="ProfilePictureUploader" component={ProfilePictureUploader} />
 
         {/* Pantallas de administrador */}
         <Stack.Screen name="AdminDashboard" component={AdminDashboard} />

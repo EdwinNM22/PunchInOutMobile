@@ -1,18 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Linking, SafeAreaView, ScrollView, Image } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  TouchableOpacity,
+  Linking,
+  SafeAreaView,
+  ScrollView,
+  ImageBackground,
+  RefreshControl,
+  Alert,
+} from 'react-native';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, collection, getDocs, query, where, doc, getDoc, setDoc } from 'firebase/firestore';
+import {
+  getFirestore,
+  collection,
+  getDocs,
+  query,
+  where,
+  doc,
+  getDoc,
+  setDoc,
+} from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-import { Alert } from 'react-native';
-import { ImageBackground } from 'react-native';
-
 
 export default function UserProjects() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const auth = getAuth();
   const db = getFirestore();
@@ -23,7 +42,7 @@ export default function UserProjects() {
   }, []);
 
   const fetchAssignedProjects = async () => {
-    setLoading(true);
+    if (!refreshing) setLoading(true);
     try {
       const user = auth.currentUser;
       if (!user) {
@@ -52,7 +71,13 @@ export default function UserProjects() {
       console.error('Error fetching assigned projects:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchAssignedProjects();
   };
 
   const handleProjectPress = (project) => {
@@ -87,10 +112,7 @@ export default function UserProjects() {
             trigger: null,
           });
         } catch (e) {
-          Alert.alert(
-            'Ubicación enviada',
-            'Su ubicación ha sido enviada al administrador.'
-          );
+          Alert.alert('Ubicación enviada', 'Su ubicación ha sido enviada al administrador.');
         }
       }
     } catch (error) {
@@ -99,7 +121,7 @@ export default function UserProjects() {
     }
   };
 
-  if (loading) {
+  if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#E53935" />
@@ -109,83 +131,88 @@ export default function UserProjects() {
   }
 
   return (
-  <ImageBackground
-    source={require('../assets/fondo8.jpg')} // Cambia por tu imagen
-    style={{ flex: 1 }}
-    resizeMode="cover"
-  >
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.container}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Mis Proyectos</Text>
-            <Image 
-              source={require('../assets/biovizion.jpg')} 
-              style={styles.headerIcon}
+    <ImageBackground
+      source={require('../assets/fondo8.jpg')}
+      style={{ flex: 1 }}
+      resizeMode="cover"
+    >
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#E53935']}
+              tintColor="#E53935"
             />
-          </View>
-
-          {/* Action Buttons */}
-          <View style={styles.actionButtonsContainer}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.locationButton]}
-              onPress={getUserLocation}
-            >
-              <Ionicons name="location" size={22} color="#fff" />
-              <Text style={styles.actionButtonText}>Compartir ubicación</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionButton, styles.chatButton]}
-              onPress={() => navigation.navigate('ChatScreen')}
-            >
-              <MaterialIcons name="chat" size={22} color="#fff" />
-              <Text style={styles.actionButtonText}>Chat</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Projects List */}
-          {projects.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="folder-open" size={50} color="#E53935" />
-              <Text style={styles.noProjectsText}>No tienes proyectos asignados</Text>
+          }
+        >
+          <View style={styles.container}>
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>My Projects</Text>
             </View>
-          ) : (
-            projects.map((proj) => (
+
+            {/* Action Buttons */}
+            <View style={styles.actionButtonsContainer}>
               <TouchableOpacity
-                key={proj.id}
-                style={styles.projectCard}
-                onPress={() => handleProjectPress(proj)}
+                style={[styles.actionButton, styles.locationButton]}
+                onPress={getUserLocation}
               >
-                <View style={styles.projectHeader}>
-                  <Ionicons name="document-text" size={24} color="#E53935" />
-                  <Text style={styles.projectTitle}>{proj.name}</Text>
-                </View>
-                <Text style={styles.projectDescription}>{proj.description}</Text>
-
-                {proj.location && (
-                  <TouchableOpacity
-                    style={styles.locationLink}
-                    onPress={() => {
-                      const url = `https://www.google.com/maps/search/?api=1&query=${proj.location.latitude},${proj.location.longitude}`;
-                      Linking.openURL(url);
-                    }}
-                  >
-                    <Text style={styles.locationLinkText}>
-                      <Ionicons name="map" size={16} color="#E53935" /> Ver en mapa
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                <Ionicons name="location" size={22} color="#fff" />
+                <Text style={styles.actionButtonText}>Share my location</Text>
               </TouchableOpacity>
-            ))
-          )}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  </ImageBackground>
-);
 
+              <TouchableOpacity
+                style={[styles.actionButton, styles.chatButton]}
+                onPress={() => navigation.navigate('ChatScreen')}
+              >
+                <MaterialIcons name="chat" size={22} color="#fff" />
+                <Text style={styles.actionButtonText}>Chat</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Projects List */}
+            {projects.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="folder-open" size={50} color="#E53935" />
+                <Text style={styles.noProjectsText}>No tienes proyectos asignados</Text>
+              </View>
+            ) : (
+              projects.map((proj) => (
+                <TouchableOpacity
+                  key={proj.id}
+                  style={styles.projectCard}
+                  onPress={() => handleProjectPress(proj)}
+                >
+                  <View style={styles.projectHeader}>
+                    <Ionicons name="document-text" size={24} color="#E53935" />
+                    <Text style={styles.projectTitle}>{proj.name}</Text>
+                  </View>
+                  <Text style={styles.projectDescription}>{proj.description}</Text>
+
+                  {proj.location && (
+                    <TouchableOpacity
+                      style={styles.locationLink}
+                      onPress={() => {
+                        const url = `https://www.google.com/maps/search/?api=1&query=${proj.location.latitude},${proj.location.longitude}`;
+                        Linking.openURL(url);
+                      }}
+                    >
+                      <Text style={styles.locationLinkText}>
+                        <Ionicons name="map" size={16} color="#E53935" /> View on map
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </ImageBackground>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -200,7 +227,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(18, 18, 18, 0.8)', // Añadida transparencia
+    backgroundColor: 'rgba(18, 18, 18, 0.8)',
   },
   loadingText: {
     color: '#FFFFFF',
@@ -209,25 +236,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)', // Añadida transparencia
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 25,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)', // Añadida transparencia
-    padding: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    padding: 20,
     borderRadius: 8,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#FFFFFF',
-  },
-  headerIcon: {
-    width: 40,
-    height: 40,
   },
   actionButtonsContainer: {
     flexDirection: 'row',
@@ -249,10 +272,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   locationButton: {
-    backgroundColor: 'rgba(229, 57, 53, 0.8)', // Añadida transparencia
+    backgroundColor: 'rgba(229, 57, 53, 0.8)',
   },
   chatButton: {
-    backgroundColor: 'rgba(30, 136, 229, 0.8)', // Añadida transparencia
+    backgroundColor: 'rgba(30, 136, 229, 0.8)',
   },
   actionButtonText: {
     color: '#FFFFFF',
@@ -264,7 +287,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 40,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)', // Añadida transparencia
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderRadius: 10,
   },
   noProjectsText: {
@@ -274,7 +297,7 @@ const styles = StyleSheet.create({
     color: '#AAAAAA',
   },
   projectCard: {
-    backgroundColor: 'rgba(30, 30, 30, 0.7)', // Añadida transparencia
+    backgroundColor: 'rgba(30, 30, 30, 0.7)',
     padding: 16,
     marginBottom: 15,
     borderRadius: 10,

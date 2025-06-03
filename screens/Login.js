@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from 'react';  
-import { View, Text, TextInput, TouchableOpacity, Alert, Image, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ImageBackground,
+  ScrollView,
+  TouchableWithoutFeedback,
+  Keyboard
+} from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
@@ -86,6 +99,7 @@ const Login = (props) => {
       if (docSnap.exists()) {
         const rol = docSnap.data().rol;
         navigateByRole(rol);
+        await registerForPushToken(user.uid);
       } else {
         Alert.alert('Error', 'No se encontró el perfil del usuario');
       }
@@ -109,7 +123,6 @@ const Login = (props) => {
       return;
     }
     await loginUser(email, password);
-    await registerForPushToken(user.uid);
   };
 
   const handleUseAnotherAccount = () => {
@@ -123,88 +136,102 @@ const Login = (props) => {
   return (
     <KeyboardAvoidingView 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-      style={styles.container}
+      style={{ flex: 1 }}
     >
-      <View style={styles.innerContainer}>
-        {/* Logo o imagen */}
-        <Image 
-          source={require('../assets/biovizion.jpg')} // Cambia por tu propia imagen
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        
-        <Text style={styles.title}>Iniciar Sesión</Text>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ImageBackground 
+          source={require('../assets/login.jpg')} 
+          style={{ flex: 1 }}
+          resizeMode="cover"
+        >
+          <View style={styles.overlay}>
+            <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+              <View style={styles.innerContainer}>
+                <Image 
+                  source={require('../assets/biovizion.jpg')}
+                  style={styles.logo}
+                  resizeMode="contain"
+                />
+                
+                <Text style={styles.title}>Iniciar Sesión</Text>
 
-        {isFirstTime && (
-          <>
-            <TextInput
-              style={styles.input}
-              placeholder="Correo electrónico"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              placeholderTextColor="#aaa"
-            />
+                {isFirstTime && (
+                  <>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Correo electrónico"
+                      value={email}
+                      onChangeText={setEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      placeholderTextColor="#aaa"
+                    />
 
-            <TextInput
-              style={styles.input}
-              placeholder="Contraseña"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholderTextColor="#aaa"
-            />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Contraseña"
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry
+                      placeholderTextColor="#aaa"
+                    />
 
-            <TouchableOpacity style={styles.button} onPress={handleLogin}>
-              <Text style={styles.buttonText}>Iniciar sesión</Text>
-            </TouchableOpacity>
-          </>
-        )}
+                    <TouchableOpacity style={styles.button} onPress={handleLogin}>
+                      <Text style={styles.buttonText}>Iniciar sesión</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
 
-        {!isFirstTime && isBiometricAvailable && (
-          <>
-            <TouchableOpacity 
-              style={styles.biometricButton} 
-              onPress={handleBiometricAuth}
-            >
-              <Text style={styles.biometricButtonText}>Iniciar con huella</Text>
-            </TouchableOpacity>
+                {!isFirstTime && isBiometricAvailable && (
+                  <>
+                    <TouchableOpacity 
+                      style={styles.biometricButton} 
+                      onPress={handleBiometricAuth}
+                    >
+                      <Text style={styles.biometricButtonText}>Iniciar Sesión</Text>
+                    </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.secondaryButton} 
-              onPress={handleUseAnotherAccount}
-            >
-              <Text style={styles.secondaryButtonText}>Iniciar con otra cuenta</Text>
-            </TouchableOpacity>
-          </>
-        )}
+                    <TouchableOpacity 
+                      style={styles.secondaryButton} 
+                      onPress={handleUseAnotherAccount}
+                    >
+                      <Text style={styles.secondaryButtonText}>Iniciar con otra cuenta</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
 
-        {!isFirstTime && !isBiometricAvailable && (
-          <TouchableOpacity 
-            style={styles.button} 
-            onPress={() => setIsFirstTime(true)}
-          >
-            <Text style={styles.buttonText}>Ingresar con email y contraseña</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+                {!isFirstTime && !isBiometricAvailable && (
+                  <TouchableOpacity 
+                    style={styles.button} 
+                    onPress={() => setIsFirstTime(true)}
+                  >
+                    <Text style={styles.buttonText}>Ingresar con email y contraseña</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </ScrollView>
+          </View>
+        </ImageBackground>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 };
 
 const styles = {
-  container: {
+  overlay: {
     flex: 1,
-    backgroundColor: '#121212', // Fondo oscuro
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  innerContainer: {
-    flex: 1,
+  scrollContainer: {
+    flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 30,
   },
+  innerContainer: {
+    justifyContent: 'center',
+  },
   logo: {
-    width: 150,
+    width: 900,
     height: 150,
     alignSelf: 'center',
     marginBottom: 30,
@@ -212,7 +239,7 @@ const styles = {
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#E53935', // Rojo intenso
+    color: '#E53935',
     marginBottom: 30,
     textAlign: 'center',
     textShadowColor: 'rgba(229, 57, 53, 0.3)',
@@ -220,7 +247,7 @@ const styles = {
     textShadowRadius: 4,
   },
   input: {
-    backgroundColor: '#1E1E1E', // Fondo oscuro para inputs
+    backgroundColor: 'rgba(0,0,0,0.5)',
     color: '#FFFFFF',
     paddingHorizontal: 15,
     paddingVertical: 12,
@@ -228,10 +255,10 @@ const styles = {
     marginBottom: 15,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#E53935', // Borde rojo
+    borderColor: '#E53935',
   },
   button: {
-    backgroundColor: '#E53935', // Rojo intenso
+    backgroundColor: 'rgba(255, 0, 0, 0.77)',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
