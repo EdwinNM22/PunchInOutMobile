@@ -1,59 +1,67 @@
-import { Text, View, TextInput, TouchableOpacity, Alert, Pressable, Clipboard } from 'react-native';
 import React, { useState } from 'react';
-import appFirebase from '../credenciales';
+import {
+  Text, View, TextInput, TouchableOpacity,
+  Alert, StyleSheet, SafeAreaView,
+  ImageBackground, ActivityIndicator, KeyboardAvoidingView, Platform
+} from 'react-native';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import { initializeApp } from 'firebase/app';
+import appFirebase from '../credenciales';
 
 const auth = getAuth(appFirebase);
 const db = getFirestore(appFirebase);
-
-// Crear una segunda app de Firebase solo para registrar usuarios sin cerrar la sesión actual
 const secondaryApp = initializeApp(appFirebase.options, 'Secondary');
 const secondaryAuth = getAuth(secondaryApp);
 
-export default function Register(props) {
+export default function Register({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nombre, setNombre] = useState('');
   const [showCredentials, setShowCredentials] = useState(false);
   const [credenciales, setCredenciales] = useState({ email: '', password: '' });
+  const [isLoading, setIsLoading] = useState(false);
 
   const registrar = async () => {
+    if (!nombre || !email || !password) {
+      Alert.alert('Error', 'Por favor complete todos los campos');
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      // Crear el usuario con la segunda instancia de auth
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
       const user = userCredential.user;
 
-      // Guardar en Firestore con la instancia principal
       await setDoc(doc(db, "usuarios", user.uid), {
         nombre: nombre,
         email: email,
-        rol: 'USER',
+        role: 'trabajador',
+        createdAt: new Date().toISOString()
       });
 
-      console.log("Usuario guardado con rol USER");
-
-      // Cerrar sesión en la segunda instancia para evitar conflictos
-      await signOut(secondaryAuth);
-
-      // Guardar credenciales para mostrarlas
-      setCredenciales({
-        email: email,
-        password: password
-      });
-
-      // Mostrar el cuadro de credenciales
+      setCredenciales({ email, password });
       setShowCredentials(true);
-
-      // Limpiar campos
       setNombre('');
       setEmail('');
       setPassword('');
-
+      
+      Alert.alert('Éxito', 'Usuario registrado correctamente');
     } catch (error) {
-      console.log(error);
-      Alert.alert('Error', 'Hubo un problema con el registro');
+      console.error(error);
+      let errorMessage = 'Hubo un problema con el registro';
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'El correo electrónico ya está en uso';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'La contraseña debe tener al menos 6 caracteres';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'El correo electrónico no es válido';
+      }
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setIsLoading(false);
+      await signOut(secondaryAuth);
     }
   };
 
@@ -64,142 +72,235 @@ export default function Register(props) {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Regístrate</Text>
+    <ImageBackground
+      source={require('../assets/fondo8.jpg')}
+      style={{ flex: 1 }}
+      resizeMode="cover"
+    >
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.container}
+        >
+          <View style={styles.formContainer}>
+            {/* Encabezado */}
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>Registrar Nuevo Usuario</Text>
+            </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Nombre de usuario"
-        value={nombre}
-        onChangeText={(text) => setNombre(text)}
-        placeholderTextColor="#aaa"
-      />
+            {/* Campos del formulario */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Nombre completo</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ingrese el nombre completo"
+                placeholderTextColor="#AAAAAA"
+                value={nombre}
+                onChangeText={setNombre}
+              />
+            </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Correo electrónico"
-        value={email}
-        onChangeText={(text) => setEmail(text)}
-        keyboardType="email-address"
-        placeholderTextColor="#aaa"
-      />
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Correo electrónico</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ingrese el correo electrónico"
+                placeholderTextColor="#AAAAAA"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Contraseña"
-        value={password}
-        onChangeText={(text) => setPassword(text)}
-        secureTextEntry
-        placeholderTextColor="#aaa"
-      />
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Contraseña</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ingrese la contraseña"
+                placeholderTextColor="#AAAAAA"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+            </View>
 
-      <TouchableOpacity style={styles.button} onPress={registrar}>
-        <Text style={styles.buttonText}>Registrar</Text>
-      </TouchableOpacity>
+            {/* Botón de registro */}
+            <TouchableOpacity 
+              style={[styles.registerButton, isLoading && styles.disabledButton]}
+              onPress={registrar}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <MaterialIcons name="person-add" size={20} color="#FFFFFF" />
+                  <Text style={styles.registerButtonText}>REGISTRAR USUARIO</Text>
+                </>
+              )}
+            </TouchableOpacity>
 
-      <TouchableOpacity style={styles.button} onPress={() => props.navigation.navigate('AdminDashboard')}>
-        <Text style={styles.buttonText}>Volver al Dashboard</Text>
-      </TouchableOpacity>
+            {/* Botón para volver */}
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={() => navigation.navigate('AdminDashboard')}
+            >
+              <Ionicons name="arrow-back" size={20} color="#3498db" />
+              <Text style={styles.backButtonText}>VOLVER AL PANEL</Text>
+            </TouchableOpacity>
 
-      {/* Cuadro de credenciales que aparece después del registro */}
-      {showCredentials && (
-        <View style={styles.credentialsBox}>
-          <Text style={styles.credentialsTitle}>Credenciales creadas:</Text>
-
-          <View style={styles.credentialsInfo}>
-            <Text style={styles.credentialsText}>
-              <Text style={styles.credentialsLabel}>Email: </Text>
-              {credenciales.email}
-            </Text>
-            <Text style={styles.credentialsText}>
-              <Text style={styles.credentialsLabel}>Contraseña: </Text>
-              {credenciales.password}
-            </Text>
+            {/* Cuadro de credenciales */}
+            {showCredentials && (
+              <View style={styles.credentialsBox}>
+                <Text style={styles.credentialsTitle}>Credenciales creadas</Text>
+                <View style={styles.credentialsContent}>
+                  <View style={styles.credentialItem}>
+                    <MaterialIcons name="email" size={18} color="#3498db" />
+                    <Text style={styles.credentialText}>{credenciales.email}</Text>
+                  </View>
+                  <View style={styles.credentialItem}>
+                    <MaterialIcons name="lock" size={18} color="#3498db" />
+                    <Text style={styles.credentialText}>{credenciales.password}</Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.copyButton}
+                  onPress={copiarCredenciales}
+                >
+                  <Ionicons name="copy" size={16} color="#FFFFFF" />
+                  <Text style={styles.copyButtonText}>COPIAR CREDENCIALES</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
-
-          <TouchableOpacity
-            style={styles.copyButton}
-            onPress={copiarCredenciales}
-          >
-            <Text style={styles.copyButtonText}>Copiar Credenciales</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </ImageBackground>
   );
-};
+}
 
-const styles = {
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: 'rgba(18, 18, 18, 0.38)',
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
-    padding: 20,
-    backgroundColor: '#fff',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  formContainer: {
+    backgroundColor: 'rgba(30, 30, 30, 0.7)',
+    borderRadius: 10,
+    padding: 20,
+    marginHorizontal: 20,
+  },
+  header: {
+    alignItems: 'center',
     marginBottom: 20,
-    textAlign: 'center',
-    color: '#333',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  inputContainer: {
+    marginBottom: 15,
+  },
+  label: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    marginBottom: 8,
+    fontWeight: '500',
   },
   input: {
-    height: 50,
-    borderColor: '#ccc',
-    borderWidth: 1,
-    borderRadius: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    color: '#FFFFFF',
+    borderRadius: 8,
     paddingHorizontal: 15,
-    marginBottom: 15,
+    paddingVertical: 12,
     fontSize: 16,
-    backgroundColor: '#f9f9f9',
   },
-  button: {
-    backgroundColor: '#3498db',
-    padding: 15,
-    borderRadius: 5,
+  registerButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 15,
+    backgroundColor: '#2ecc71',
+    padding: 15,
+    borderRadius: 8,
+    marginTop: 10,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
+  disabledButton: {
+    backgroundColor: '#7f8c8d',
+  },
+  registerButtonText: {
+    color: '#FFFFFF',
     fontWeight: 'bold',
+    fontSize: 16,
+    marginLeft: 10,
+  },
+  backButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 15,
+    marginTop: 10,
+  },
+  backButtonText: {
+    color: '#3498db',
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginLeft: 10,
   },
   credentialsBox: {
     marginTop: 20,
-    padding: 15,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#dee2e6',
+    padding: 15,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3498db',
   },
   credentialsTitle: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 10,
-    color: '#333',
     textAlign: 'center',
   },
-  credentialsInfo: {
+  credentialsContent: {
     marginBottom: 15,
   },
-  credentialsText: {
-    fontSize: 14,
-    marginBottom: 5,
-    color: '#495057',
+  credentialItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
   },
-  credentialsLabel: {
-    fontWeight: 'bold',
-    color: '#212529',
+  credentialText: {
+    color: '#FFFFFF',
+    marginLeft: 10,
+    fontSize: 14,
   },
   copyButton: {
-    backgroundColor: '#2196F3',
-    padding: 10,
-    borderRadius: 5,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#3498db',
+    padding: 12,
+    borderRadius: 8,
   },
   copyButtonText: {
-    color: 'white',
+    color: '#FFFFFF',
     fontWeight: 'bold',
+    fontSize: 14,
+    marginLeft: 10,
   },
-};
+});
