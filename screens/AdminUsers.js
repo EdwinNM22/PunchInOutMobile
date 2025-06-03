@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  TextInput, SafeAreaView, ScrollView, ActivityIndicator, Dimensions
+  TextInput, SafeAreaView, ScrollView, ActivityIndicator,   ImageBackground, Dimensions
 } from 'react-native';
 import { getFirestore, collection, getDocs } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
@@ -74,6 +74,11 @@ export default function AdminHome() {
   }
 
   return (
+        <ImageBackground
+          source={require('../assets/fondo8.jpg')}
+          style={{ flex: 1 }}
+          resizeMode="cover"
+        >
     <SafeAreaView style={styles.safeArea}>
       <ScrollView 
         contentContainerStyle={styles.scrollContainer}
@@ -149,13 +154,14 @@ export default function AdminHome() {
         </View>
       </ScrollView>
     </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: 'rgba(18, 18, 18, 1)',
+    backgroundColor: 'rgba(18, 18, 18, 0.54)',
   },
   scrollContainer: {
     flexGrow: 1,

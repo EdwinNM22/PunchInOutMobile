@@ -39,7 +39,7 @@ const AdminDashboard = () => {
       icon: 'security'
     },
     {
-      title: 'Subir foto (sin terminar)',
+      title: 'Subir foto sin terminar',
       screen: 'ProfilePictureUploader',
       color: 'rgba(244, 67, 54, 0.9)',
       icon: 'security'
