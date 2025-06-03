@@ -2,10 +2,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Linking, TextInput, Alert
+  ActivityIndicator, Linking, TextInput, Alert, SafeAreaView,
+  ScrollView, ImageBackground
 } from 'react-native';
 import { getFirestore, collection, query, where, getDocs, updateDoc, doc, deleteDoc } from 'firebase/firestore';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
 export default function AdminProjects() {
@@ -33,6 +34,7 @@ export default function AdminProjects() {
       setProjects(list);
     } catch (e) {
       console.error('Error fetching projects:', e);
+      Alert.alert('Error', 'No se pudieron cargar los proyectos');
     } finally {
       setIsRefreshing(false);
       setLoading(false);
@@ -43,8 +45,6 @@ export default function AdminProjects() {
     fetchProjects();
   }, [viewType]);
 
-  // 1) Filtrar por nombre según searchQuery
-  // 2) Ordenar por createdAt descendente
   const displayedProjects = useMemo(() => {
     const filtered = projects.filter(p =>
       p.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
@@ -63,22 +63,42 @@ export default function AdminProjects() {
     });
   };
 
-  /* ---------- marcar finalizado ---------- */
-  const toggleCompleted = async (proj) => {
-    try {
-      const db = getFirestore();
-      await updateDoc(doc(db, 'proyectos', proj.id), {
-        status: proj.status === 'activo' ? 'completado' : 'activo'
-      });
-      fetchProjects();
-    } catch (e) { console.error(e); }
+  const toggleProjectStatus = async (proj) => {
+    const newStatus = proj.status === 'activo' ? 'completado' : 'activo';
+    
+    Alert.alert(
+      'Cambiar estado',
+      `¿Deseas marcar este proyecto como ${newStatus === 'activo' ? 'ACTIVO' : 'COMPLETADO'}?`,
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel'
+        },
+        {
+          text: 'Confirmar',
+          onPress: async () => {
+            try {
+              const db = getFirestore();
+              await updateDoc(doc(db, 'proyectos', proj.id), {
+                status: newStatus,
+                updatedAt: new Date().toISOString()
+              });
+              fetchProjects();
+              Alert.alert('Éxito', `Estado cambiado a ${newStatus.toUpperCase()}`);
+            } catch (e) {
+              console.error(e);
+              Alert.alert('Error', 'No se pudo actualizar el estado del proyecto');
+            }
+          }
+        }
+      ]
+    );
   };
 
-  /* ---------- borrar definitivo ---------- */
   const deleteProject = async (proj) => {
     Alert.alert(
       'Eliminar proyecto',
-      '¿Está seguro? Los reportes dejarán de estar disponibles.',
+      '¿Está seguro? Todos los datos asociados se perderán permanentemente.',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -88,224 +108,398 @@ export default function AdminProjects() {
               const db = getFirestore();
               await deleteDoc(doc(db, 'proyectos', proj.id));
               fetchProjects();
-            } catch (e) { console.error(e); }
+              Alert.alert('Éxito', 'Proyecto eliminado correctamente');
+            } catch (e) {
+              console.error(e);
+              Alert.alert('Error', 'No se pudo eliminar el proyecto');
+            }
           }
         }
       ]
     );
   };
+
   const renderProject = ({ item }) => (
     <View style={styles.projectCard}>
-      <Text style={styles.projectTitle}>{item.name}</Text>
-      <Text>{item.description}</Text>
+      <View style={styles.projectHeader}>
+        <Text style={styles.projectTitle}>{item.name}</Text>
+        <TouchableOpacity
+          style={[
+            styles.statusBadge,
+            item.status === 'completado' ? styles.completedBadge : styles.activeBadge
+          ]}
+          onPress={() => toggleProjectStatus(item)}
+        >
+          <Text style={styles.statusText}>
+            {item.status === 'completado' ? 'COMPLETADO' : 'ACTIVO'}
+          </Text>
+          <Feather 
+            name={item.status === 'completado' ? 'check-circle' : 'refresh-cw'} 
+            size={16} 
+            color="#FFFFFF" 
+            style={styles.statusIcon}
+          />
+        </TouchableOpacity>
+      </View>
+      
+      {item.description && (
+        <Text style={styles.projectDescription}>{item.description}</Text>
+      )}
 
       {item.location?.latitude != null && item.location?.longitude != null && (
-        <TouchableOpacity onPress={() => {
-          const url = `https://www.google.com/maps/search/?api=1&query=${item.location.latitude},${item.location.longitude}`;
-          Linking.openURL(url);
-        }}>
-          <Text style={styles.projectLocation}>
-            Ver Ubicación: {item.location.latitude.toFixed(4)}, {item.location.longitude.toFixed(4)}
+        <TouchableOpacity 
+          style={styles.locationButton}
+          onPress={() => {
+            const url = `https://www.google.com/maps/search/?api=1&query=${item.location.latitude},${item.location.longitude}`;
+            Linking.openURL(url);
+          }}
+        >
+          <MaterialIcons name="location-on" size={18} color="#3498db" />
+          <Text style={styles.locationText}>
+            {item.location.latitude.toFixed(4)}, {item.location.longitude.toFixed(4)}
           </Text>
         </TouchableOpacity>
       )}
 
-      <TouchableOpacity
-        style={styles.reportButton}
-        onPress={() => handleReportPress(item)}
-      >
-        <Text style={styles.reportButtonText}>Ver reportes del proyecto</Text>
-      </TouchableOpacity>
-
-      {/* ---- acción variable según estado ---- */}
-      {item.status === 'activo' ? (
+      <View style={styles.buttonsContainer}>
         <TouchableOpacity
-          style={styles.assignButton}
-          onPress={() =>
-            navigation.navigate('AssignProject', { projectId: item.id, projectName: item.name })}
+          style={[styles.actionButton, styles.reportButton]}
+          onPress={() => handleReportPress(item)}
         >
-          <Text style={styles.assignButtonText}>Asignar proyecto a trabajadores</Text>
+          <MaterialIcons name="assessment" size={18} color="white" />
+          <Text style={styles.actionButtonText}>Reportes</Text>
         </TouchableOpacity>
-      ) : (
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => deleteProject(item)}
-        >
-          <Text style={styles.deleteButtonText}>Eliminar registro del proyecto</Text>
-        </TouchableOpacity>
-      )}
 
-      {/* ---- checkbox “finalizado” ---- */}
-      <TouchableOpacity
-        style={styles.checkbox}
-        onPress={() => toggleCompleted(item)}
-      >
-        {item.status === 'completado' && (
-          <Ionicons name="checkmark" size={18} color="#fff" />
+        {item.status === 'activo' ? (
+          <TouchableOpacity
+            style={[styles.actionButton, styles.assignButton]}
+            onPress={() => navigation.navigate('AssignProject', { 
+              projectId: item.id, 
+              projectName: item.name 
+            })}
+          >
+            <Ionicons name="people" size={18} color="white" />
+            <Text style={styles.actionButtonText}>Asignar</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.actionButton, styles.deleteButton]}
+            onPress={() => deleteProject(item)}
+          >
+            <MaterialIcons name="delete" size={18} color="white" />
+            <Text style={styles.actionButtonText}>Eliminar</Text>
+          </TouchableOpacity>
         )}
-      </TouchableOpacity>
+      </View>
     </View>
   );
 
   if (loading) {
-    return <ActivityIndicator size="large" style={styles.loading} />;
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FFFFFF" />
+        <Text style={styles.loadingText}>Cargando proyectos...</Text>
+      </View>
+    );
   }
 
   return (
-    <View style={styles.container}>
-
-      {/* Filtros de estado */}
-      <View style={styles.topButtonsContainer}>
-        <TouchableOpacity
-          style={[
-            styles.topButton,
-            viewType === 'completed' && styles.activeTopButton
-          ]}
-          onPress={() => setViewType(viewType === 'completed' ? 'active' : 'completed')}
+    <ImageBackground
+      source={require('../assets/fondo8.jpg')}
+      style={{ flex: 1 }}
+      resizeMode="cover"
+    >
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.topButtonText}>Proyectos antiguos</Text>
-        </TouchableOpacity>
+          <View style={styles.container}>
+            {/* Encabezado */}
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>Gestión de Proyectos</Text>
+            </View>
 
-        <TouchableOpacity
-          style={styles.topButton}
-          onPress={() => navigation.navigate('CreateProject')}
-        >
-          <Text style={styles.topButtonText}>Proyecto nuevo</Text>
-        </TouchableOpacity>
-      </View>
+            {/* Botón destacado para nuevo proyecto */}
+            <TouchableOpacity
+              style={styles.createProjectButton}
+              onPress={() => navigation.navigate('CreateProject')}
+            >
+              <MaterialIcons name="add-circle" size={24} color="#FFFFFF" />
+              <Text style={styles.createProjectButtonText}>NUEVO PROYECTO</Text>
+            </TouchableOpacity>
 
-      {/* Barra de búsqueda */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#666" style={{ marginHorizontal: 8 }} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Buscar proyecto…"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          returnKeyType="search"
-        />
-      </View>
+            {/* Filtros y búsqueda */}
+            <View style={styles.filterContainer}>
+              <View style={styles.toggleContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleButton,
+                    viewType === 'active' && styles.activeToggleButton
+                  ]}
+                  onPress={() => setViewType('active')}
+                >
+                  <Text style={styles.toggleButtonText}>Proyectos Activos</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.toggleButton,
+                    viewType === 'completed' && styles.activeToggleButton
+                  ]}
+                  onPress={() => setViewType('completed')}
+                >
+                  <Text style={styles.toggleButtonText}>Proyectos Completados</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.searchContainer}>
+                <Ionicons name="search" size={20} color="#FFFFFF" style={styles.searchIcon} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Buscar proyectos..."
+                  placeholderTextColor="#AAAAAA"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  returnKeyType="search"
+                />
+              </View>
+            </View>
 
-      <FlatList
-        data={displayedProjects}
-        keyExtractor={item => item.id}
-        refreshing={isRefreshing}
-        onRefresh={fetchProjects}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="folder-open" size={50} color="#ccc" />
-            <Text style={styles.emptyText}>No hay proyectos que coincidan</Text>
+            {/* Lista de proyectos */}
+            {displayedProjects.length > 0 ? (
+              <FlatList
+                data={displayedProjects}
+                keyExtractor={item => item.id}
+                refreshing={isRefreshing}
+                onRefresh={fetchProjects}
+                renderItem={renderProject}
+                scrollEnabled={false}
+                contentContainerStyle={styles.projectsList}
+              />
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="folder-open" size={50} color="#CCCCCC" />
+                <Text style={styles.emptyText}>No hay proyectos {viewType === 'active' ? 'activos' : 'completados'}</Text>
+                {searchQuery.trim() !== '' && (
+                  <Text style={styles.emptyHint}>Intenta con otro término de búsqueda</Text>
+                )}
+              </View>
+            )}
           </View>
-        }
-        renderItem={renderProject}
-      />
-    </View>
+        </ScrollView>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  topButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    padding: 10,
-    backgroundColor: '#fff'
-  },
-  topButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 5,
-    backgroundColor: '#ddd'
-  },
-  activeTopButton: {
-    backgroundColor: '#4a76ff'
-  },
-  topButtonText: {
-    color: '#fff',
-    fontWeight: 'bold'
-  },
-  // Nueva barra de búsqueda
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#eee',
-    margin: 12,
-    borderRadius: 8,
-    height: 40
-  },
-  searchInput: {
+  safeArea: {
     flex: 1,
-    paddingHorizontal: 8,
-    fontSize: 16
+    backgroundColor: 'rgba(18, 18, 18, 0.38)',
   },
-  listContent: {
-    padding: 15
+  scrollContainer: {
+    flexGrow: 1,
+    paddingBottom: 20,
   },
-  emptyContainer: {
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 50
+    backgroundColor: 'rgba(18, 18, 18, 0.8)',
   },
-  emptyText: {
-    marginTop: 15,
+  loadingText: {
+    color: '#FFFFFF',
+    marginTop: 10,
     fontSize: 16,
-    color: '#999',
-    textAlign: 'center'
   },
-  projectCard: {
-    backgroundColor: '#fff',
+  container: {
+    flex: 1,
+    padding: 15,
+  },
+  header: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 15,
+    padding: 15,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 10,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  createProjectButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#E53935',
     padding: 15,
     borderRadius: 10,
+    marginBottom: 20,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  createProjectButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginLeft: 10,
+  },
+  filterContainer: {
+    marginBottom: 20,
+    backgroundColor: 'rgba(30, 30, 30, 0.7)',
+    borderRadius: 10,
+    padding: 15,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  toggleButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginHorizontal: 5,
+    alignItems: 'center',
+  },
+  activeToggleButton: {
+    backgroundColor: '#E53935',
+  },
+  toggleButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '500',
+    fontSize: 14,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    height: 40,
+    fontSize: 16,
+  },
+  projectsList: {
+    paddingBottom: 20,
+  },
+  projectCard: {
+    backgroundColor: 'rgba(30, 30, 30, 0.7)',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 15,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3498db',
+  },
+  projectHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 10,
-    elevation: 2
   },
   projectTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 5
+    color: '#FFFFFF',
+    flex: 1,
   },
-  projectLocation: {
-    color: '#4a76ff',
-    textDecorationLine: 'underline',
-    marginTop: 5
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    marginLeft: 10,
+  },
+  activeBadge: {
+    backgroundColor: '#2ecc71',
+  },
+  completedBadge: {
+    backgroundColor: '#e74c3c',
+  },
+  statusText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  statusIcon: {
+    marginLeft: 5,
+  },
+  projectDescription: {
+    color: '#CCCCCC',
+    marginBottom: 10,
+    fontSize: 14,
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  locationText: {
+    color: '#3498db',
+    marginLeft: 5,
+    fontSize: 14,
+  },
+  buttonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+    flex: 1,
+    marginHorizontal: 5,
+    justifyContent: 'center',
   },
   reportButton: {
-    marginTop: 10,
-    backgroundColor: '#4a76ff',
-    padding: 10,
-    borderRadius: 5,
-    alignItems: 'center'
-  },
-  reportButtonText: {
-    color: '#fff'
+    backgroundColor: '#3498db',
   },
   assignButton: {
-    marginTop: 10,
     backgroundColor: '#f39c12',
-    padding: 10,
-    borderRadius: 5,
-    alignItems: 'center'
-  },
-  assignButtonText: {
-    color: '#fff'
-  },
-  loading: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  checkbox: {
-    position: 'absolute', top: 10, right: 10,
-    width: 24, height: 24, borderRadius: 4,
-    borderWidth: 1, borderColor: '#777',
-    justifyContent: 'center', alignItems: 'center',
-    backgroundColor: '#4CAF50'
   },
   deleteButton: {
-    marginTop: 10, backgroundColor: '#e74c3c',
-    padding: 10, borderRadius: 5, alignItems: 'center'
+    backgroundColor: '#e74c3c',
   },
-  deleteButtonText: { color: '#fff' },
+  actionButtonText: {
+    color: '#FFFFFF',
+    marginLeft: 5,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  emptyContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: 'rgba(30, 30, 30, 0.7)',
+    borderRadius: 10,
+  },
+  emptyText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    marginTop: 15,
+    textAlign: 'center',
+  },
+  emptyHint: {
+    color: '#AAAAAA',
+    fontSize: 14,
+    marginTop: 5,
+    textAlign: 'center',
+  },
 });
