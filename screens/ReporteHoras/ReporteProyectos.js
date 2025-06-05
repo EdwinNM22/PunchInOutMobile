@@ -58,7 +58,7 @@ export default function ReporteProyectos() {
           const proyectoId = proyectoDoc.id;
           const proyectoNombre = proyectoDoc.data().name || `Proyecto ${proyectoId}`;
 
-          const horasRef = collection(db, 'usuarios', userId, 'horas', proyectoId, 'fechas');
+          const horasRef = collection(db, 'usuarios', userId, 'horas', proyectoId, 'registros');
           const horasSnapshot = await getDocs(horasRef);
 
           let proyectoTotal = 0;

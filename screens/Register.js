@@ -37,7 +37,7 @@ export default function Register({ navigation }) {
       await setDoc(doc(db, "usuarios", user.uid), {
         nombre: nombre,
         email: email,
-        role: 'trabajador',
+        rol: 'WORKER',
         createdAt: new Date().toISOString()
       });
 
@@ -184,7 +184,7 @@ export default function Register({ navigation }) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: 'rgba(18, 18, 18, 0.38)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   container: {
     flex: 1,

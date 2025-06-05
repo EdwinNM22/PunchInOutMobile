@@ -89,7 +89,7 @@ export default function ReporteUsuario() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: 'rgba(18, 18, 18, 0.38)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   scrollContainer: {
     flexGrow: 1,

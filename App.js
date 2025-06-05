@@ -35,8 +35,10 @@ import ReporteUsuario from './screens/ReporteHoras/ReporteUsuario';
 import ReporteSemanal from './screens/ReporteHoras/ReporteSemanal';
 import ReporteMensual from './screens/ReporteHoras/ReporteMensual';
 import ReporteProyectos from './screens/ReporteHoras/ReporteProyectos';
-import ChatScreen from './screens/UserChat/Chat';
+
 import ProfilePictureUploader from './screens/ProfilePictureUploader';
+import ChatScreen from './screens/UserChat/ChatScreen';
+import MessageScreen from './screens/UserChat/MessageScreen';
 
 
 
@@ -80,6 +82,7 @@ export default function App() {
         <Stack.Screen name="Login" component={Login} />
         <Stack.Screen name="Register" component={Register} />
         <Stack.Screen name="ChatScreen" component={ChatScreen} />
+        <Stack.Screen name="MessageScreen" component={MessageScreen} />
 
         {/* Pantallas de usuario */}
         <Stack.Screen name="UserHome" component={UserHome} />

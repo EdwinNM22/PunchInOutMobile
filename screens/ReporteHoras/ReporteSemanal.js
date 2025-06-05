@@ -1,55 +1,82 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, ScrollView, TouchableOpacity, Modal, RefreshControl, TextInput, Alert, ImageBackground } from 'react-native';
-import { useRoute } from '@react-navigation/native';
-import { getAuth } from 'firebase/auth';
-import { getFirestore, collection, getDocs, doc, getDoc, query, where, setDoc, addDoc, serverTimestamp, orderBy, limit } from 'firebase/firestore';
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, parseISO, isWithinInterval } from 'date-fns';
-import { es } from 'date-fns/locale';
-import * as Print from 'expo-print';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import styles from '../../Styles/ReporteUsuarioStyle';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import React, { useState, useEffect } from "react";
+import {View,Text,StyleSheet,FlatList,ActivityIndicator,ScrollView,TouchableOpacity,Modal,RefreshControl,TextInput,Alert,ImageBackground,} from "react-native";
+import { useRoute } from "@react-navigation/native";
+import { getAuth } from "firebase/auth";
+import {getFirestore,collection,getDocs,doc,getDoc,query,where,setDoc,addDoc,serverTimestamp,orderBy,limit,} from "firebase/firestore";
+import {format,startOfWeek,endOfWeek,eachDayOfInterval,isSameDay,parseISO,isWithinInterval,} from "date-fns";
+import { es } from "date-fns/locale";
+import * as Print from "expo-print";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
+import styles from "../../Styles/ReporteUsuarioStyle";
+import Icon from "react-native-vector-icons/MaterialIcons";
 
 // Componente para generar el PDF
 const PDFGenerator = ({ reportData }) => {
   const generateHTML = () => {
-    if (!reportData) return '';
+    if (!reportData) return "";
 
-    const weekStart = format(parseSafeDate(reportData.period.weekStart), 'dd/MM/yyyy');
-    const weekEnd = format(parseSafeDate(reportData.period.weekEnd), 'dd/MM/yyyy');
-    const generatedAt = format(new Date(), 'dd/MM/yyyy HH:mm');
+    const weekStart = format(
+      parseSafeDate(reportData.period.weekStart),
+      "dd/MM/yyyy"
+    );
+    const weekEnd = format(
+      parseSafeDate(reportData.period.weekEnd),
+      "dd/MM/yyyy"
+    );
+    const generatedAt = format(new Date(), "dd/MM/yyyy HH:mm");
 
-    let projectsHTML = '';
-    let dailyHTML = '';
+    let projectsHTML = "";
+    let dailyHTML = "";
 
     // Generar HTML para los proyectos
-    reportData.weekly.forEach(day => {
+    reportData.weekly.forEach((day) => {
       const dayTotal = (day.hours || 0) + (day.extraHours || 0);
       if (dayTotal > 0 && day.projects && day.projects.length > 0) {
         dailyHTML += `
           <div style="margin-bottom: 15px; border: 1px solid #ddd; padding: 10px; border-radius: 5px;">
             <h3 style="margin: 0 0 10px 0; color: #333; display: flex; justify-content: space-between;">
-              <span>${day.dayName} - ${format(parseSafeDate(day.date), 'dd/MM')}</span>
-              <span>${dayTotal.toFixed(2)} hrs (${day.hours.toFixed(2)} + ${day.extraHours.toFixed(2)} extras)</span>
+              <span>${day.dayName} - ${format(
+          parseSafeDate(day.date),
+          "dd/MM"
+        )}</span>
+              <span>${dayTotal.toFixed(2)} hrs (${day.hours.toFixed(
+          2
+        )} + ${day.extraHours.toFixed(2)} extras)</span>
             </h3>
             <table style="width: 100%; border-collapse: collapse;">
-              ${day.projects.map(project => `
+              ${day.projects
+                .map(
+                  (project) => `
                 <tr>
-                  <td style="padding: 5px; border-bottom: 1px solid #eee;">${project.name}</td>
-                  <td style="padding: 5px; border-bottom: 1px solid #eee; text-align: right;">${project.hours.toFixed(2)} hrs</td>
+                  <td style="padding: 5px; border-bottom: 1px solid #eee;">${
+                    project.name
+                  }</td>
+                  <td style="padding: 5px; border-bottom: 1px solid #eee; text-align: right;">${project.hours.toFixed(
+                    2
+                  )} hrs</td>
                 </tr>
-              `).join('')}
-              ${day.extraHours > 0 ? `
+              `
+                )
+                .join("")}
+              ${
+                day.extraHours > 0
+                  ? `
                 <tr>
                   <td style="padding: 5px; border-bottom: 1px solid #eee; font-weight: bold;">Horas extras</td>
-                  <td style="padding: 5px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">${day.extraHours.toFixed(2)} hrs</td>
+                  <td style="padding: 5px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">${day.extraHours.toFixed(
+                    2
+                  )} hrs</td>
                 </tr>
                 <tr>
                   <td style="padding: 5px; font-weight: bold;">Total del día</td>
-                  <td style="padding: 5px; text-align: right; font-weight: bold;">${dayTotal.toFixed(2)} hrs</td>
+                  <td style="padding: 5px; text-align: right; font-weight: bold;">${dayTotal.toFixed(
+                    2
+                  )} hrs</td>
                 </tr>
-              ` : ''}
+              `
+                  : ""
+              }
             </table>
           </div>
         `;
@@ -84,15 +111,21 @@ const PDFGenerator = ({ reportData }) => {
             <div class="section-title">Resumen Semanal</div>
             <div class="summary-row">
               <span>Total horas proyectos:</span>
-              <span class="summary-value">${reportData.summary.weeklyTotal.toFixed(2)} hrs</span>
+              <span class="summary-value">${reportData.summary.weeklyTotal.toFixed(
+                2
+              )} hrs</span>
             </div>
             <div class="summary-row">
               <span>Horas extras:</span>
-              <span class="summary-value">${reportData.summary.extraHoursTotal.toFixed(2)} hrs</span>
+              <span class="summary-value">${reportData.summary.extraHoursTotal.toFixed(
+                2
+              )} hrs</span>
             </div>
             <div class="summary-row">
               <span>Total general:</span>
-              <span class="summary-value">${reportData.summary.generalTotal.toFixed(2)} hrs</span>
+              <span class="summary-value">${reportData.summary.generalTotal.toFixed(
+                2
+              )} hrs</span>
             </div>
           </div>
           
@@ -110,7 +143,8 @@ const PDFGenerator = ({ reportData }) => {
   const parseSafeDate = (dateString) => {
     try {
       if (!dateString) return new Date();
-      const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+      const date =
+        typeof dateString === "string" ? new Date(dateString) : dateString;
       return isNaN(date.getTime()) ? new Date() : date;
     } catch (e) {
       return new Date();
@@ -120,39 +154,43 @@ const PDFGenerator = ({ reportData }) => {
   const generatePDF = async () => {
     try {
       const html = generateHTML();
-      
+
       const { uri } = await Print.printToFileAsync({
         html: html,
         width: 612,
         height: 792,
-        base64: false
+        base64: false,
       });
-      
-      console.log('PDF generado en:', uri);
-      
+
+      console.log("PDF generado en:", uri);
+
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
-          mimeType: 'application/pdf',
-          dialogTitle: 'Compartir Reporte Semanal',
-          UTI: 'com.adobe.pdf'
+          mimeType: "application/pdf",
+          dialogTitle: "Compartir Reporte Semanal",
+          UTI: "com.adobe.pdf",
         });
       } else {
         alert(`PDF generado correctamente en: ${uri}`);
       }
-      
     } catch (error) {
-      console.error('Error al generar PDF:', error);
-      alert('Error al generar el PDF. Por favor intenta nuevamente.');
+      console.error("Error al generar PDF:", error);
+      alert("Error al generar el PDF. Por favor intenta nuevamente.");
     }
   };
 
   return (
-    <TouchableOpacity 
-      onPress={generatePDF} 
+    <TouchableOpacity
+      onPress={generatePDF}
       style={styles.pdfButton}
       activeOpacity={0.7}
     >
-      <Icon name="picture-as-pdf" size={20} color="#FFFFFF" style={styles.pdfIcon} />
+      <Icon
+        name="picture-as-pdf"
+        size={20}
+        color="#FFFFFF"
+        style={styles.pdfIcon}
+      />
       <Text style={styles.pdfButtonText}>Generar PDF</Text>
     </TouchableOpacity>
   );
@@ -168,10 +206,10 @@ export default function ReporteSemanal() {
   const [reportHistory, setReportHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [selectedHistoryReport, setSelectedHistoryReport] = useState(null);
-  const [viewMode, setViewMode] = useState('list');
+  const [viewMode, setViewMode] = useState("list");
   const [extraHoursModalVisible, setExtraHoursModalVisible] = useState(false);
   const [currentDayIndex, setCurrentDayIndex] = useState(-1);
-  const [extraHoursInput, setExtraHoursInput] = useState('');
+  const [extraHoursInput, setExtraHoursInput] = useState("");
 
   const auth = getAuth();
   const db = getFirestore();
@@ -179,7 +217,8 @@ export default function ReporteSemanal() {
   const parseSafeDate = (dateString) => {
     try {
       if (!dateString) return new Date();
-      const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+      const date =
+        typeof dateString === "string" ? new Date(dateString) : dateString;
       return isNaN(date.getTime()) ? new Date() : date;
     } catch (e) {
       return new Date();
@@ -195,53 +234,91 @@ export default function ReporteSemanal() {
       const weekStart = startOfWeek(now, { locale: es });
       const weekEnd = endOfWeek(now, { locale: es });
 
-      const proyectosRef = collection(db, 'proyectos');
+      const proyectosRef = collection(db, "proyectos");
       const proyectosSnapshot = await getDocs(proyectosRef);
 
       const weeklyData = [];
       const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
-      const dailyHours = weekDays.map(day => ({
+      const dailyHours = weekDays.map((day) => ({
         date: day,
-        dayName: format(day, 'EEEE', { locale: es }),
+        dayName: format(day, "EEEE", { locale: es }),
         hours: 0,
         extraHours: 0,
         total: 0,
-        projects: []
+        projects: [],
       }));
 
       let weeklyTotal = 0;
       let extraHoursTotal = 0;
 
       for (const proyectoDoc of proyectosSnapshot.docs) {
-        const assignmentRef = doc(db, 'proyectos', proyectoDoc.id, 'assignments', userId);
+        const assignmentRef = doc(
+          db,
+          "proyectos",
+          proyectoDoc.id,
+          "assignments",
+          userId
+        );
         const assignmentSnap = await getDoc(assignmentRef);
 
         if (assignmentSnap.exists()) {
           const proyectoId = proyectoDoc.id;
-          const proyectoNombre = proyectoDoc.data().name || `Proyecto ${proyectoId}`;
+          const proyectoNombre =
+            proyectoDoc.data().name || `Proyecto ${proyectoId}`;
 
-          const horasRef = collection(db, 'usuarios', userId, 'horas', proyectoId, 'fechas');
-          const horasSnapshot = await getDocs(horasRef);
+          const registrosRef = collection(
+            db,
+            "usuarios",
+            userId,
+            "horas",
+            proyectoId,
+            "registros"
+          );
+          const registrosQuery = query(
+            registrosRef,
+            where("pushInTime", ">=", weekStart.toISOString()),
+            where("pushInTime", "<=", weekEnd.toISOString())
+          );
 
-          horasSnapshot.forEach(fechaDoc => {
-            const fechaData = fechaDoc.data();
-            if (fechaData.totalHours) {
-              const horas = typeof fechaData.totalHours === 'number' ?
-                fechaData.totalHours :
-                parseFloat(fechaData.totalHours);
+          const registrosSnapshot = await getDocs(registrosQuery);
 
-              const registroFecha = parseSafeDate(fechaData.pushInTime);
+          registrosSnapshot.forEach((registroDoc) => {
+            const registroData = registroDoc.data();
+            if (registroData.totalHours) {
+              const horas =
+                typeof registroData.totalHours === "number"
+                  ? registroData.totalHours
+                  : parseFloat(registroData.totalHours);
 
-              if (isWithinInterval(registroFecha, { start: weekStart, end: weekEnd })) {
+              const registroFecha = parseSafeDate(registroData.pushInTime);
+
+              if (
+                isWithinInterval(registroFecha, {
+                  start: weekStart,
+                  end: weekEnd,
+                })
+              ) {
                 weeklyTotal += horas;
 
-                const dayIndex = weekDays.findIndex(d => isSameDay(d, registroFecha));
+                const dayIndex = weekDays.findIndex((d) =>
+                  isSameDay(d, registroFecha)
+                );
                 if (dayIndex !== -1) {
                   dailyHours[dayIndex].hours += horas;
-                  dailyHours[dayIndex].projects.push({
-                    name: proyectoNombre,
-                    hours: horas
-                  });
+
+                  const existingProjectIndex = dailyHours[
+                    dayIndex
+                  ].projects.findIndex((p) => p.name === proyectoNombre);
+
+                  if (existingProjectIndex >= 0) {
+                    dailyHours[dayIndex].projects[existingProjectIndex].hours +=
+                      horas;
+                  } else {
+                    dailyHours[dayIndex].projects.push({
+                      name: proyectoNombre,
+                      hours: horas,
+                    });
+                  }
                 }
               }
             }
@@ -249,56 +326,81 @@ export default function ReporteSemanal() {
         }
       }
 
-      // Obtener horas extras guardadas
-      const extraHoursRef = doc(db, 'usuarios', userId, 'horas_extras', 'current_week');
+      // Obtener horas extras guardadas - MODIFICADO PARA USAR FECHAS ESPECÍFICAS
+      const extraHoursRef = doc(
+        db,
+        "usuarios",
+        userId,
+        "horas_extras",
+        "current_week"
+      );
       const extraHoursSnap = await getDoc(extraHoursRef);
-      
+
       if (extraHoursSnap.exists()) {
         const extraHoursData = extraHoursSnap.data();
         if (extraHoursData.days) {
-          extraHoursData.days.forEach((dayExtra, index) => {
-            if (index < dailyHours.length) {
-              dailyHours[index].extraHours = dayExtra.extraHours || 0;
-              extraHoursTotal += dailyHours[index].extraHours;
+          // Reiniciamos todas las horas extras primero
+          dailyHours.forEach((day) => {
+            day.extraHours = 0;
+          });
+
+          // Asignamos las horas extras según la fecha correspondiente
+          extraHoursData.days.forEach((dayExtra) => {
+            const extraDate = parseSafeDate(dayExtra.date);
+            const dayIndex = weekDays.findIndex((d) => isSameDay(d, extraDate));
+
+            if (dayIndex !== -1) {
+              dailyHours[dayIndex].extraHours = dayExtra.extraHours || 0;
+              extraHoursTotal += dailyHours[dayIndex].extraHours;
             }
           });
         }
       }
 
       // Calcular total por día
-      dailyHours.forEach(day => {
+      dailyHours.forEach((day) => {
         day.total = day.hours + day.extraHours;
       });
 
-      weeklyData.push(...dailyHours.map(day => ({
-        ...day,
-        projects: day.projects.sort((a, b) => b.hours - a.hours)
-      })));
+      weeklyData.push(
+        ...dailyHours.map((day) => ({
+          ...day,
+          projects: day.projects.sort((a, b) => b.hours - a.hours),
+        }))
+      );
 
       const fullReportData = {
         weekly: weeklyData,
         summary: {
           weeklyTotal,
           extraHoursTotal,
-          generalTotal: weeklyTotal + extraHoursTotal
+          generalTotal: weeklyTotal + extraHoursTotal,
         },
         generatedAt: now.toISOString(),
         period: {
           weekStart: weekStart.toISOString(),
-          weekEnd: weekEnd.toISOString()
+          weekEnd: weekEnd.toISOString(),
         },
-        type: 'current'
+        type: "current",
       };
 
       setReportData(fullReportData);
       await checkAndSaveHistoricalReports(userId, fullReportData, weekStart);
-
     } catch (error) {
       console.error("Error obteniendo reporte semanal:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  // Función auxiliar para obtener la fecha actual en formato YYYY-MM-DD
+  const todayString = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(d.getDate()).padStart(2, "0")}`;
   };
 
   useEffect(() => {
@@ -311,37 +413,62 @@ export default function ReporteSemanal() {
     fetchReportData();
   };
 
-  const checkAndSaveHistoricalReports = async (userId, reportData, weekStart) => {
+  const checkAndSaveHistoricalReports = async (
+    userId,
+    reportData,
+    weekStart
+  ) => {
     try {
       const now = new Date();
 
-      const reportRef = doc(db, 'usuarios', userId, 'reportes', 'current');
+      const reportRef = doc(db, "usuarios", userId, "reportes", "current");
       await setDoc(reportRef, reportData);
 
-      const weeklyHistoryRef = collection(db, 'usuarios', userId, 'reportes', 'historial', 'semanales');
-      const q = query(weeklyHistoryRef, where('period.weekStart', '==', weekStart.toISOString()));
+      const weeklyHistoryRef = collection(
+        db,
+        "usuarios",
+        userId,
+        "reportes",
+        "historial",
+        "semanales"
+      );
+      const q = query(
+        weeklyHistoryRef,
+        where("period.weekStart", "==", weekStart.toISOString())
+      );
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {
         await addDoc(weeklyHistoryRef, {
           ...reportData,
-          type: 'weekly',
-          savedAt: serverTimestamp()
+          type: "weekly",
+          savedAt: serverTimestamp(),
         });
-        console.log('Nuevo reporte semanal guardado en historial');
+        console.log("Nuevo reporte semanal guardado en historial");
       } else {
         const docToUpdate = querySnapshot.docs[0];
-        const docRef = doc(db, 'usuarios', userId, 'reportes', 'historial', 'semanales', docToUpdate.id);
-        await setDoc(docRef, {
-          ...reportData,
-          type: 'weekly',
-          savedAt: serverTimestamp()
-        }, { merge: true });
-        console.log('Reporte semanal existente actualizado en historial');
+        const docRef = doc(
+          db,
+          "usuarios",
+          userId,
+          "reportes",
+          "historial",
+          "semanales",
+          docToUpdate.id
+        );
+        await setDoc(
+          docRef,
+          {
+            ...reportData,
+            type: "weekly",
+            savedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+        console.log("Reporte semanal existente actualizado en historial");
       }
-
     } catch (error) {
-      console.error('Error guardando reportes históricos semanales:', error);
+      console.error("Error guardando reportes históricos semanales:", error);
     }
   };
 
@@ -349,8 +476,15 @@ export default function ReporteSemanal() {
     try {
       setLoadingHistory(true);
 
-      const historyRef = collection(db, 'usuarios', userId, 'reportes', 'historial', 'semanales');
-      const q = query(historyRef, orderBy('savedAt', 'desc'), limit(10));
+      const historyRef = collection(
+        db,
+        "usuarios",
+        userId,
+        "reportes",
+        "historial",
+        "semanales"
+      );
+      const q = query(historyRef, orderBy("savedAt", "desc"), limit(10));
       const querySnapshot = await getDocs(q);
 
       const history = [];
@@ -359,18 +493,20 @@ export default function ReporteSemanal() {
         history.push({
           id: doc.id,
           ...data,
-          savedAt: data.savedAt?.toDate ? data.savedAt.toDate() : parseSafeDate(data.savedAt),
+          savedAt: data.savedAt?.toDate
+            ? data.savedAt.toDate()
+            : parseSafeDate(data.savedAt),
           period: {
             weekStart: parseSafeDate(data.period?.weekStart),
-            weekEnd: parseSafeDate(data.period?.weekEnd)
-          }
+            weekEnd: parseSafeDate(data.period?.weekEnd),
+          },
         });
       });
 
       setReportHistory(history);
       setHistoryModalVisible(true);
     } catch (error) {
-      console.error('Error cargando historial semanal:', error);
+      console.error("Error cargando historial semanal:", error);
     } finally {
       setLoadingHistory(false);
     }
@@ -378,17 +514,19 @@ export default function ReporteSemanal() {
 
   const loadSpecificReport = (report) => {
     setSelectedHistoryReport(report);
-    setViewMode('details');
+    setViewMode("details");
   };
 
   const backToHistoryList = () => {
-    setViewMode('list');
+    setViewMode("list");
     setSelectedHistoryReport(null);
   };
 
   const openExtraHoursModal = (dayIndex) => {
     setCurrentDayIndex(dayIndex);
-    setExtraHoursInput(reportData.weekly[dayIndex].extraHours.toString() || '0');
+    setExtraHoursInput(
+      reportData.weekly[dayIndex].extraHours.toString() || "0"
+    );
     setExtraHoursModalVisible(true);
   };
 
@@ -398,17 +536,21 @@ export default function ReporteSemanal() {
 
       const extraHoursValue = parseFloat(extraHoursInput) || 0;
       if (extraHoursValue < 0) {
-        Alert.alert('Error', 'Las horas extras no pueden ser negativas');
+        Alert.alert("Error", "Las horas extras no pueden ser negativas");
         return;
       }
 
       // Actualizar el estado local
       const updatedWeekly = [...reportData.weekly];
       updatedWeekly[currentDayIndex].extraHours = extraHoursValue;
-      updatedWeekly[currentDayIndex].total = updatedWeekly[currentDayIndex].hours + extraHoursValue;
+      updatedWeekly[currentDayIndex].total =
+        updatedWeekly[currentDayIndex].hours + extraHoursValue;
 
       // Calcular el total de horas extras
-      const extraHoursTotal = updatedWeekly.reduce((sum, day) => sum + day.extraHours, 0);
+      const extraHoursTotal = updatedWeekly.reduce(
+        (sum, day) => sum + day.extraHours,
+        0
+      );
 
       const updatedReportData = {
         ...reportData,
@@ -416,30 +558,61 @@ export default function ReporteSemanal() {
         summary: {
           ...reportData.summary,
           extraHoursTotal,
-          generalTotal: reportData.summary.weeklyTotal + extraHoursTotal
-        }
+          generalTotal: reportData.summary.weeklyTotal + extraHoursTotal,
+        },
       };
 
       setReportData(updatedReportData);
 
-      // Guardar en Firebase
-      const extraHoursRef = doc(db, 'usuarios', userId, 'horas_extras', 'current_week');
+      // Guardar en Firebase - MODIFICADO PARA INCLUIR LA FECHA ESPECÍFICA
+      const extraHoursRef = doc(
+        db,
+        "usuarios",
+        userId,
+        "horas_extras",
+        "current_week"
+      );
+
+      // Obtenemos el día específico que estamos modificando
+      const dayToUpdate = updatedWeekly[currentDayIndex];
+
+      // Primero obtenemos las horas extras existentes
+      const extraHoursSnap = await getDoc(extraHoursRef);
+      let existingExtraHours = [];
+
+      if (extraHoursSnap.exists()) {
+        existingExtraHours = extraHoursSnap.data().days || [];
+      }
+
+      // Buscamos si ya existe una entrada para este día
+      const dayIndex = existingExtraHours.findIndex((d) =>
+        isSameDay(parseSafeDate(d.date), parseSafeDate(dayToUpdate.date))
+      );
+
+      if (dayIndex !== -1) {
+        // Actualizamos la entrada existente
+        existingExtraHours[dayIndex].extraHours = extraHoursValue;
+      } else {
+        // Agregamos una nueva entrada
+        existingExtraHours.push({
+          date: dayToUpdate.date,
+          extraHours: extraHoursValue,
+        });
+      }
+
+      // Guardamos todo el array actualizado
       await setDoc(extraHoursRef, {
-        days: updatedWeekly.map(day => ({
-          date: day.date,
-          extraHours: day.extraHours
-        })),
-        updatedAt: serverTimestamp()
+        days: existingExtraHours,
+        updatedAt: serverTimestamp(),
       });
 
       setExtraHoursModalVisible(false);
-      Alert.alert('Éxito', 'Horas extras guardadas correctamente');
+      Alert.alert("Éxito", "Horas extras guardadas correctamente");
     } catch (error) {
-      console.error('Error guardando horas extras:', error);
-      Alert.alert('Error', 'No se pudieron guardar las horas extras');
+      console.error("Error guardando horas extras:", error);
+      Alert.alert("Error", "No se pudieron guardar las horas extras");
     }
   };
-
   const renderWeeklyDetails = () => {
     if (!selectedHistoryReport) return null;
 
@@ -455,25 +628,49 @@ export default function ReporteSemanal() {
         </TouchableOpacity>
 
         <Text style={styles.detailsTitle}>
-          Semana del {format(parseSafeDate(selectedHistoryReport.period.weekStart), 'dd/MM/yyyy')} al {format(parseSafeDate(selectedHistoryReport.period.weekEnd), 'dd/MM/yyyy')}
+          Semana del{" "}
+          {format(
+            parseSafeDate(selectedHistoryReport.period.weekStart),
+            "dd/MM/yyyy"
+          )}{" "}
+          al{" "}
+          {format(
+            parseSafeDate(selectedHistoryReport.period.weekEnd),
+            "dd/MM/yyyy"
+          )}
         </Text>
 
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Resumen Semanal</Text>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Total horas proyectos:</Text>
-            <Text style={styles.summaryValue}>{selectedHistoryReport.summary?.weeklyTotal?.toFixed(2) || '0.00'} hrs</Text>
+            <Text style={styles.summaryValue}>
+              {selectedHistoryReport.summary?.weeklyTotal?.toFixed(2) || "0.00"}{" "}
+              hrs
+            </Text>
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Horas extras:</Text>
-            <Text style={styles.summaryValue}>{selectedHistoryReport.summary?.extraHoursTotal?.toFixed(2) || '0.00'} hrs</Text>
+            <Text style={styles.summaryValue}>
+              {selectedHistoryReport.summary?.extraHoursTotal?.toFixed(2) ||
+                "0.00"}{" "}
+              hrs
+            </Text>
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Total general:</Text>
-            <Text style={styles.summaryValue}>{selectedHistoryReport.summary?.generalTotal?.toFixed(2) || '0.00'} hrs</Text>
+            <Text style={styles.summaryValue}>
+              {selectedHistoryReport.summary?.generalTotal?.toFixed(2) ||
+                "0.00"}{" "}
+              hrs
+            </Text>
           </View>
           <Text style={styles.periodText}>
-            Guardado el {format(parseSafeDate(selectedHistoryReport.savedAt), 'dd/MM/yyyy HH:mm')}
+            Guardado el{" "}
+            {format(
+              parseSafeDate(selectedHistoryReport.savedAt),
+              "dd/MM/yyyy HH:mm"
+            )}
           </Text>
         </View>
 
@@ -481,12 +678,24 @@ export default function ReporteSemanal() {
 
         <Text style={styles.sectionTitle}>Horas por Día</Text>
         {selectedHistoryReport.weekly?.map((day, index) => (
-          <View key={index} style={(day.hours > 0 || day.extraHours > 0) ? styles.dayCardActive : styles.dayCard}>
+          <View
+            key={index}
+            style={
+              day.hours > 0 || day.extraHours > 0
+                ? styles.dayCardActive
+                : styles.dayCard
+            }
+          >
             <View style={styles.dayHeader}>
               <Text style={styles.dayName}>{day.dayName}</Text>
-              <Text style={styles.dayDate}>{format(parseSafeDate(day.date), 'dd/MM')}</Text>
+              <Text style={styles.dayDate}>
+                {format(parseSafeDate(day.date), "dd/MM")}
+              </Text>
               <View style={styles.dayHoursContainer}>
-                <Text style={styles.dayHours}>{day.total.toFixed(2)} hrs ({day.hours.toFixed(2)} + {day.extraHours.toFixed(2)} extras)</Text>
+                <Text style={styles.dayHours}>
+                  {day.total.toFixed(2)} hrs ({day.hours.toFixed(2)} +{" "}
+                  {day.extraHours.toFixed(2)} extras)
+                </Text>
               </View>
             </View>
 
@@ -495,18 +704,28 @@ export default function ReporteSemanal() {
                 {day.projects.map((project, pIndex) => (
                   <View key={pIndex} style={styles.projectRow}>
                     <Text style={styles.projectName}>{project.name}</Text>
-                    <Text style={styles.projectHours}>{(project.hours || 0).toFixed(2)} hrs</Text>
+                    <Text style={styles.projectHours}>
+                      {(project.hours || 0).toFixed(2)} hrs
+                    </Text>
                   </View>
                 ))}
                 {day.extraHours > 0 && (
                   <View style={styles.projectRow}>
-                    <Text style={[styles.projectName, styles.boldText]}>Horas extras</Text>
-                    <Text style={[styles.projectHours, styles.boldText]}>{day.extraHours.toFixed(2)} hrs</Text>
+                    <Text style={[styles.projectName, styles.boldText]}>
+                      Horas extras
+                    </Text>
+                    <Text style={[styles.projectHours, styles.boldText]}>
+                      {day.extraHours.toFixed(2)} hrs
+                    </Text>
                   </View>
                 )}
                 <View style={styles.projectRow}>
-                  <Text style={[styles.projectName, styles.boldText]}>Total del día</Text>
-                  <Text style={[styles.projectHours, styles.boldText]}>{day.total.toFixed(2)} hrs</Text>
+                  <Text style={[styles.projectName, styles.boldText]}>
+                    Total del día
+                  </Text>
+                  <Text style={[styles.projectHours, styles.boldText]}>
+                    {day.total.toFixed(2)} hrs
+                  </Text>
                 </View>
               </View>
             )}
@@ -520,7 +739,12 @@ export default function ReporteSemanal() {
     <FlatList
       data={reportHistory}
       keyExtractor={(item) => item.id}
-      refreshControl={<RefreshControl refreshing={loadingHistory} onRefresh={loadReportHistory} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={loadingHistory}
+          onRefresh={loadReportHistory}
+        />
+      }
       contentContainerStyle={styles.historyListContainer}
       renderItem={({ item }) => (
         <TouchableOpacity
@@ -529,42 +753,54 @@ export default function ReporteSemanal() {
           activeOpacity={0.7}
         >
           <Text style={styles.historyItemTitle}>
-            Semana del {format(parseSafeDate(item.period.weekStart), 'dd/MM/yyyy')} al {format(parseSafeDate(item.period.weekEnd), 'dd/MM/yyyy')}
+            Semana del{" "}
+            {format(parseSafeDate(item.period.weekStart), "dd/MM/yyyy")} al{" "}
+            {format(parseSafeDate(item.period.weekEnd), "dd/MM/yyyy")}
           </Text>
           <View style={styles.historyItemRow}>
             <Text style={styles.historyItemLabel}>Horas proyectos:</Text>
-            <Text style={styles.historyItemValue}>{(item.summary?.weeklyTotal || 0).toFixed(2)} hrs</Text>
+            <Text style={styles.historyItemValue}>
+              {(item.summary?.weeklyTotal || 0).toFixed(2)} hrs
+            </Text>
           </View>
           <View style={styles.historyItemRow}>
             <Text style={styles.historyItemLabel}>Horas extras:</Text>
-            <Text style={styles.historyItemValue}>{(item.summary?.extraHoursTotal || 0).toFixed(2)} hrs</Text>
+            <Text style={styles.historyItemValue}>
+              {(item.summary?.extraHoursTotal || 0).toFixed(2)} hrs
+            </Text>
           </View>
           <View style={styles.historyItemRow}>
             <Text style={styles.historyItemLabel}>Total general:</Text>
-            <Text style={[styles.historyItemValue, styles.historyItemTotal]}>{(item.summary?.generalTotal || 0).toFixed(2)} hrs</Text>
+            <Text style={[styles.historyItemValue, styles.historyItemTotal]}>
+              {(item.summary?.generalTotal || 0).toFixed(2)} hrs
+            </Text>
           </View>
-          <Text style={styles.savedAtText}>Guardado: {format(parseSafeDate(item.savedAt), 'dd/MM/yyyy HH:mm')}</Text>
+          <Text style={styles.savedAtText}>
+            Guardado: {format(parseSafeDate(item.savedAt), "dd/MM/yyyy HH:mm")}
+          </Text>
         </TouchableOpacity>
       )}
       ListEmptyComponent={() => (
         <View style={styles.emptyContainer}>
           <Icon name="history" size={40} color="#AAAAAA" />
-          <Text style={styles.emptyText}>No hay reportes históricos para mostrar.</Text>
+          <Text style={styles.emptyText}>
+            No hay reportes históricos para mostrar.
+          </Text>
         </View>
       )}
     />
   );
 
   return (
-    <ImageBackground 
-      source={require('../../assets/fondo10.jpg')}
+    <ImageBackground
+      source={require("../../assets/fondo10.jpg")}
       style={styles.backgroundImage}
       resizeMode="cover"
     >
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Reporte Semanal</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.refreshButton}
             onPress={onRefresh}
             activeOpacity={0.7}
@@ -579,44 +815,69 @@ export default function ReporteSemanal() {
             <Text style={styles.loadingText}>Cargando reporte...</Text>
           </View>
         ) : reportData ? (
-          <ScrollView 
-            style={styles.reportContainer} 
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          <ScrollView
+            style={styles.reportContainer}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
           >
             <View style={styles.summaryCard}>
               <View style={styles.summaryHeader}>
                 <Text style={styles.summaryTitle}>Resumen Semanal</Text>
                 <PDFGenerator reportData={reportData} />
               </View>
-              
+
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Total horas proyectos:</Text>
-                <Text style={styles.summaryValue}>{reportData.summary.weeklyTotal.toFixed(2)} hrs</Text>
+                <Text style={styles.summaryValue}>
+                  {reportData.summary.weeklyTotal.toFixed(2)} hrs
+                </Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Horas extras:</Text>
-                <Text style={styles.summaryValue}>{reportData.summary.extraHoursTotal.toFixed(2)} hrs</Text>
+                <Text style={styles.summaryValue}>
+                  {reportData.summary.extraHoursTotal.toFixed(2)} hrs
+                </Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Total general:</Text>
-                <Text style={styles.summaryValue}>{reportData.summary.generalTotal.toFixed(2)} hrs</Text>
+                <Text style={styles.summaryValue}>
+                  {reportData.summary.generalTotal.toFixed(2)} hrs
+                </Text>
               </View>
               <Text style={styles.periodText}>
-                Semana del {format(parseSafeDate(reportData.period.weekStart), 'dd/MM/yyyy')} al {format(parseSafeDate(reportData.period.weekEnd), 'dd/MM/yyyy')}
+                Semana del{" "}
+                {format(
+                  parseSafeDate(reportData.period.weekStart),
+                  "dd/MM/yyyy"
+                )}{" "}
+                al{" "}
+                {format(parseSafeDate(reportData.period.weekEnd), "dd/MM/yyyy")}
               </Text>
             </View>
 
             <Text style={styles.sectionTitle}>Detalle por Día</Text>
-            
+
             {reportData.weekly.map((day, index) => (
-              <View key={index} style={(day.hours > 0 || day.extraHours > 0) ? styles.dayCardActive : styles.dayCard}>
+              <View
+                key={index}
+                style={
+                  day.hours > 0 || day.extraHours > 0
+                    ? styles.dayCardActive
+                    : styles.dayCard
+                }
+              >
                 <View style={styles.dayHeader}>
                   <Text style={styles.dayName}>{day.dayName}</Text>
-                  <Text style={styles.dayDate}>{format(parseSafeDate(day.date), 'dd/MM')}</Text>
+                  <Text style={styles.dayDate}>
+                    {format(parseSafeDate(day.date), "dd/MM")}
+                  </Text>
                   <View style={styles.dayHoursContainer}>
-                    <Text style={styles.dayHours}>({day.extraHours.toFixed(2)} hrs extra)</Text>
-                    <TouchableOpacity 
-                      style={styles.addButton} 
+                    <Text style={styles.dayHours}>
+                      ({day.extraHours.toFixed(2)} hrs extra)
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.addButton}
                       onPress={() => openExtraHoursModal(index)}
                       activeOpacity={0.7}
                     >
@@ -624,24 +885,34 @@ export default function ReporteSemanal() {
                     </TouchableOpacity>
                   </View>
                 </View>
-                
+
                 {(day.hours > 0 || day.extraHours > 0) && day.projects && (
                   <View style={styles.projectsList}>
                     {day.projects.map((project, pIndex) => (
                       <View key={pIndex} style={styles.projectRow}>
                         <Text style={styles.projectName}>{project.name}</Text>
-                        <Text style={styles.projectHours}>{project.hours.toFixed(2)} hrs</Text>
+                        <Text style={styles.projectHours}>
+                          {project.hours.toFixed(2)} hrs
+                        </Text>
                       </View>
                     ))}
                     {day.extraHours > 0 && (
                       <View style={styles.projectRow}>
-                        <Text style={[styles.projectName, styles.boldText]}>Horas extras</Text>
-                        <Text style={[styles.projectHours, styles.boldText]}>{day.extraHours.toFixed(2)} hrs</Text>
+                        <Text style={[styles.projectName, styles.boldText]}>
+                          Horas extras
+                        </Text>
+                        <Text style={[styles.projectHours, styles.boldText]}>
+                          {day.extraHours.toFixed(2)} hrs
+                        </Text>
                       </View>
                     )}
                     <View style={styles.projectRow}>
-                      <Text style={[styles.projectName, styles.boldText]}>Total del día</Text>
-                      <Text style={[styles.projectHours, styles.boldText]}>{day.total.toFixed(2)} hrs</Text>
+                      <Text style={[styles.projectName, styles.boldText]}>
+                        Total del día
+                      </Text>
+                      <Text style={[styles.projectHours, styles.boldText]}>
+                        {day.total.toFixed(2)} hrs
+                      </Text>
                     </View>
                   </View>
                 )}
@@ -660,13 +931,18 @@ export default function ReporteSemanal() {
           onPress={loadReportHistory}
           activeOpacity={0.7}
         >
-          <Icon name="history" size={20} color="#FFFFFF" style={styles.historyIcon} />
+          <Icon
+            name="history"
+            size={20}
+            color="#FFFFFF"
+            style={styles.historyIcon}
+          />
           <Text style={styles.historyButtonText}>Ver Historial</Text>
         </TouchableOpacity>
 
-        <Modal 
-          visible={historyModalVisible} 
-          animationType="slide" 
+        <Modal
+          visible={historyModalVisible}
+          animationType="slide"
           onRequestClose={() => setHistoryModalVisible(false)}
         >
           <View style={styles.modalContainer}>
@@ -684,20 +960,28 @@ export default function ReporteSemanal() {
               </TouchableOpacity>
             </View>
 
-            {viewMode === 'list' ? renderHistoryList() : renderWeeklyDetails()}
+            {viewMode === "list" ? renderHistoryList() : renderWeeklyDetails()}
           </View>
         </Modal>
 
         {/* Modal para agregar horas extras */}
-        <Modal visible={extraHoursModalVisible} transparent={true} animationType="fade">
+        <Modal
+          visible={extraHoursModalVisible}
+          transparent={true}
+          animationType="fade"
+        >
           <View style={styles.centeredModal}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Agregar Horas Extras</Text>
               <Text style={styles.modalSubtitle}>
-                {reportData && currentDayIndex >= 0 && 
-                  `${reportData.weekly[currentDayIndex].dayName} - ${format(parseSafeDate(reportData.weekly[currentDayIndex].date), 'dd/MM')}`}
+                {reportData &&
+                  currentDayIndex >= 0 &&
+                  `${reportData.weekly[currentDayIndex].dayName} - ${format(
+                    parseSafeDate(reportData.weekly[currentDayIndex].date),
+                    "dd/MM"
+                  )}`}
               </Text>
-              
+
               <TextInput
                 style={styles.input}
                 keyboardType="numeric"
@@ -706,17 +990,17 @@ export default function ReporteSemanal() {
                 value={extraHoursInput}
                 onChangeText={setExtraHoursInput}
               />
-              
+
               <View style={styles.modalButtons}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.modalButton, styles.cancelButton]}
                   onPress={() => setExtraHoursModalVisible(false)}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.modalButtonText}>Cancelar</Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
+
+                <TouchableOpacity
                   style={[styles.modalButton, styles.saveButton]}
                   onPress={saveExtraHours}
                   activeOpacity={0.7}

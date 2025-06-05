@@ -38,12 +38,7 @@ const AdminDashboard = () => {
       color: 'rgba(244, 67, 54, 0.9)',
       icon: 'security'
     },
-    {
-      title: 'Subir foto sin terminar',
-      screen: 'ProfilePictureUploader',
-      color: 'rgba(244, 67, 54, 0.9)',
-      icon: 'security'
-    }
+
   ];
 
   // Calcular el tamaño de los botones basado en el ancho de la pantalla

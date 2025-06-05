@@ -1,87 +1,62 @@
 // ────────────────────────────────────────────────────────────
 //   Admin view – all daily reports for a single project
 // ────────────────────────────────────────────────────────────
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from "react";
 import {
-  View, Text, StyleSheet, ActivityIndicator, ScrollView,
-  TouchableOpacity, LayoutAnimation, Platform, UIManager
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  ScrollView,
+  TouchableOpacity,
+  LayoutAnimation,
+  Platform,
+  UIManager,
+  SafeAreaView,
+  ImageBackground,
+} from "react-native";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import {
-  getFirestore, collection, getDocs, doc, getDoc, orderBy, query, FieldPath
-} from 'firebase/firestore';
+  getFirestore,
+  collection,
+  getDocs,
+  query,
+  where,
+} from "firebase/firestore";
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 
-if (Platform.OS === 'android') {
+if (Platform.OS === "android") {
   UIManager.setLayoutAnimationEnabledExperimental?.(true);
 }
 
-function DeltaRow({ delta }) {
-  const sign = delta.diff > 0 ? '+' : '';
-  return (
-    <Text style={styles.deltaRow}>
-      • {delta.name}: {sign}{delta.diff} {delta.unit ?? ''}
-    </Text>
-  );
-}
-
-/* ----- one collapsible card per date ---------------------- */
-function DayCard({ day }) {
+function ReportCard({ report }) {
   const [open, setOpen] = useState(false);
   const toggle = () => {
     LayoutAnimation.easeInEaseOut();
     setOpen(!open);
   };
 
-  /* helpers */
-  const listTitle = (title, list) =>
-    list?.length ? <Text style={styles.listTitle}>{title}</Text> : null;
-
   return (
     <View style={styles.card}>
       <TouchableOpacity style={styles.cardHeader} onPress={toggle}>
-        <Text style={styles.cardHeaderText}>{day.id}</Text>
+        <View style={styles.reportHeader}>
+          <MaterialIcons name="report" size={20} color="#2c3e50" />
+          <Text style={styles.cardHeaderText}>
+            {new Date(report.createdAt).toLocaleDateString()}
+          </Text>
+        </View>
         <Ionicons
-          name={open ? 'chevron-up' : 'chevron-down'}
-          size={20} color="#2c3e50"
+          name={open ? "chevron-up" : "chevron-down"}
+          size={20}
+          color="#2c3e50"
         />
       </TouchableOpacity>
 
       {open && (
         <View style={styles.cardBody}>
-          {/* Checklist (only first day has it) */}
-          {listTitle('Checklist inicial', day.checklist)}
-          {day.checklist?.map(it => (
-            <Text key={it.id} style={styles.itemRow}>
-              • {it.name}: {it.qty} {it.unit ?? ''}
-            </Text>
-          ))}
-
-          {/* Morning delta */}
-          {listTitle('Δ Mañana', day.recountMorning)}
-          {day.recountMorning?.map(d => (
-            <DeltaRow key={d.id} delta={{ ...d, ...day.idMap[d.id] }} />
-          ))}
-
-          {/* Evening delta */}
-          {listTitle('Δ Tarde', day.recountEvening)}
-          {day.recountEvening?.map(d => (
-            <DeltaRow key={d.id} delta={{ ...d, ...day.idMap[d.id] }} />
-          ))}
-
-          {/* Notes & worker comments grouped */}
-          {day.blocks.map(b => (
-            <View key={b.id} style={styles.block}>
-              <Text style={styles.blockTitle}>
-                {b.id} {b.locked ? '' : '(abierto)'}
-              </Text>
-              <Text style={styles.jefeNote}>{b.jefeNote || '—'}</Text>
-              {b.workers.map(w => (
-                <Text key={w.id} style={styles.workerRow}>
-                  • {w.name}: {w.text}
-                </Text>
-              ))}
-            </View>
-          ))}
+          <Text style={styles.reportContent}>{report.content}</Text>
         </View>
       )}
     </View>
@@ -90,111 +65,266 @@ function DayCard({ day }) {
 
 export default function AdminProjectReports({ route }) {
   const { projectId, projectName } = route.params;
-  const [days, setDays] = useState(null);
+  const [reports, setReports] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const fetchAll = useCallback(async () => {
-    setDays(null);                      // show spinner each refresh
+  const fetchReports = useCallback(async () => {
+    setLoading(true);
     const db = getFirestore();
-  
+
     try {
-      const daySnap = await getDocs(
-        query(
-          collection(db, 'proyectos', projectId, 'dailyReports'),
-          orderBy('__name__', 'desc')
-        )
+      const q = query(
+        collection(db, "reportes"),
+        where("projectId", "==", projectId)
       );
-  
-      /* map each day-doc to a promise that enriches it */
-      const dayPromises = daySnap.docs.map(async d => {
-        const data = d.data();
-  
-        /* helper: id ➞ original checklist item (for name/unit) */
-        const idMap = Object.fromEntries(
-          (data.checklist?.list ?? []).map(i => [i.id, i])
-        );
-  
-        /* fetch comments blocks */
-        const blocksSnap = await getDocs(
-          collection(db,'proyectos',projectId,'dailyReports',d.id,'comments')
-        );
-  
-        /* fetch every workers sub-col in parallel */
-        const blocks = await Promise.all(
-          blocksSnap.docs.map(async b => {
-            const wSnap = await getDocs(
-              collection(
-                db,'proyectos',projectId,'dailyReports',d.id,'comments',b.id,'workers'
-              )
-            );
-            return {
-              id: b.id,
-              ...b.data(),
-              workers: wSnap.docs.map(w=>({ id:w.id, ...w.data() }))
-            };
-          })
-        );
-  
-        return {
-          id: d.id,
-          idMap,
-          checklist      : data.checklist?.list       ?? null,
-          recountMorning : data.recountMorning?.list  ?? null,
-          recountEvening : data.recountEvening?.list  ?? null,
-          blocks
-        };
-      });
-  
-      const allDays = await Promise.all(dayPromises);
-      setDays(allDays);
+
+      const querySnapshot = await getDocs(q);
+      const reportsData = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Ordena localmente por fecha
+      reportsData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      setReports(reportsData);
     } catch (err) {
-      console.error('AdminProjectReports fetch', err);
-      /* send an empty array so UI stops spinning but shows a message */
-      setDays([]);
-      setError(err);     // optional: add [error,setError] state to show msg
+      console.error("Error fetching reports:", err);
+      setReports([]);
+    } finally {
+      setLoading(false);
     }
   }, [projectId]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  const generatePdf = async () => {
+    if (!reports || reports.length === 0) return;
+    
+    try {
+      const html = `
+        <html>
+          <head>
+            <style>
+              body { font-family: Arial; padding: 20px; }
+              .header { text-align: center; margin-bottom: 30px; }
+              .title { font-size: 24px; font-weight: bold; color: #2c3e50; }
+              .subtitle { font-size: 16px; color: #7f8c8d; margin-bottom: 20px; }
+              .report { margin-bottom: 25px; border: 1px solid #ddd; padding: 15px; border-radius: 5px; }
+              .report-date { font-weight: bold; color: #2c3e50; margin-bottom: 10px; }
+              .report-content { color: #34495e; line-height: 1.5; }
+              .page-break { page-break-after: always; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1 class="title">${projectName}</h1>
+              <p class="subtitle">Reportes Diarios - ${new Date().toLocaleDateString()}</p>
+            </div>
+            
+            ${reports.map((report, index) => `
+              <div class="report" ${index < reports.length - 1 ? '' : ''}>
+                <div class="report-date">
+                  ${new Date(report.createdAt).toLocaleDateString()}
+                </div>
+                <div class="report-content">
+                  ${report.content.replace(/\n/g, '<br>')}
+                </div>
+              </div>
+              ${index < reports.length - 1 ? '<hr style="margin: 20px 0; border: 0; border-top: 1px dashed #ddd;">' : ''}
+            `).join('')}
+          </body>
+        </html>
+      `;
 
-  if (!days) {
+      const { uri } = await Print.printToFileAsync({ html });
+      const pdfName = `${FileSystem.documentDirectory}Reportes_${projectName.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`;
+      
+      await FileSystem.copyAsync({
+        from: uri,
+        to: pdfName,
+      });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(pdfName, {
+          mimeType: 'application/pdf',
+          dialogTitle: `Reportes de ${projectName}`,
+          UTI: 'com.adobe.pdf',
+        });
+      } else {
+        alert('El archivo PDF se ha generado pero no se puede compartir en esta plataforma.');
+      }
+    } catch (error) {
+      console.error('Error al generar PDF:', error);
+      alert('Error al generar el PDF. Por favor, inténtalo de nuevo.');
+    }
+  };
+
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
+
+  if (loading || reports === null) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large"/>
-        <Text>Cargando reportes…</Text>
-      </View>
+      <ImageBackground
+        source={require("../assets/fondo8.jpg")}
+        style={{ flex: 1 }}
+        resizeMode="cover"
+      >
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.loading}>
+            <ActivityIndicator size="large" color="#E53935" />
+            <Text style={styles.loadingText}>Cargando reportes...</Text>
+          </View>
+        </SafeAreaView>
+      </ImageBackground>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>{projectName}</Text>
-      {days.map(day => <DayCard key={day.id} day={day} />)}
-      {!days.length && (
-        <Text style={{textAlign:'center',marginTop:50}}>
-          No hay reportes aún para este proyecto.
-        </Text>
-      )}
-    </ScrollView>
+    <ImageBackground
+      source={require("../assets/fondo8.jpg")}
+      style={{ flex: 1 }}
+      resizeMode="cover"
+    >
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView style={styles.container}>
+          <View style={styles.header}>
+            <Text style={styles.title}>{projectName}</Text>
+            <Text style={styles.subtitle}>Reportes diarios</Text>
+            
+            {reports.length > 0 && (
+              <TouchableOpacity 
+                style={styles.downloadButton} 
+                onPress={generatePdf}
+              >
+                <Text style={styles.downloadButtonText}>
+                  <MaterialIcons name="picture-as-pdf" size={18} color="white" /> Descargar PDF
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {reports.length > 0 ? (
+            reports.map((report) => (
+              <ReportCard key={report.id} report={report} />
+            ))
+          ) : (
+            <View style={styles.emptyContainer}>
+              <MaterialIcons name="report-problem" size={50} color="#E53935" />
+              <Text style={styles.emptyText}>
+                No hay reportes aún para este proyecto
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 /* ───────── styles ───────── */
 const styles = StyleSheet.create({
-  container:{flex:1,backgroundColor:'#f8f9fa'},
-  loading:{flex:1,justifyContent:'center',alignItems:'center'},
-  title:{fontSize:24,fontWeight:'bold',margin:15,color:'#2c3e50'},
-  card:{backgroundColor:'#fff',margin:12,borderRadius:8,elevation:2},
-  cardHeader:{
-    flexDirection:'row',justifyContent:'space-between',alignItems:'center',
-    padding:14,borderBottomWidth:1,borderColor:'#ecf0f1'
+  safeArea: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  cardHeaderText:{fontSize:18,fontWeight:'600',color:'#34495e'},
-  cardBody:{padding:14},
-  listTitle:{marginTop:6,fontWeight:'bold',color:'#2c3e50'},
-  itemRow:{marginLeft:8},
-  deltaRow:{marginLeft:8,color:'#e67e22'},
-  block:{marginTop:10,paddingTop:6,borderTopWidth:0.5,borderColor:'#ecf0f1'},
-  blockTitle:{fontWeight:'600',color:'#16a085'},
-  jefeNote:{fontStyle:'italic',marginBottom:4,color:'#2c3e50'},
-  workerRow:{marginLeft:12,color:'#34495e'},
+  container: {
+    flex: 1,
+    paddingHorizontal: 15,
+    paddingTop: 15,
+  },
+  loading: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    color: "#FFFFFF",
+    marginTop: 10,
+    fontSize: 16,
+  },
+  header: {
+    marginBottom: 20,
+    padding: 15,
+    backgroundColor: "rgba(30, 30, 30, 0.7)",
+    borderRadius: 10,
+    position: 'relative',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#FFFFFF",
+    textAlign: "center",
+  },
+  subtitle: {
+    fontSize: 16,
+    color: "#CCCCCC",
+    textAlign: "center",
+    marginTop: 5,
+    marginBottom: 15,
+  },
+  card: {
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    marginBottom: 15,
+    borderRadius: 10,
+    overflow: "hidden",
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 15,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+  },
+  reportHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  cardHeaderText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#2c3e50",
+    marginLeft: 10,
+  },
+  cardBody: {
+    padding: 15,
+    backgroundColor: "rgba(255, 255, 255, 0.85)",
+  },
+  reportContent: {
+    fontSize: 14,
+    color: "#34495e",
+    lineHeight: 20,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 30,
+    backgroundColor: "rgba(30, 30, 30, 0.7)",
+    borderRadius: 10,
+    marginTop: 20,
+  },
+  emptyText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    textAlign: "center",
+    marginTop: 15,
+  },
+  downloadButton: {
+    backgroundColor: '#E53935',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+    alignSelf: 'center',
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  downloadButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginLeft: 5,
+  },
 });
